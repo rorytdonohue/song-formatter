@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Song Play Formatter</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎵 autobox3000v1.0.0.6.9.6.9</h1>
+            <p id="confuciusQuote">Loading wisdom...</p>
+        </header>
+
+        <!-- Floating Action Buttons -->
+        <div class="floating-buttons">
+            <button class="floating-btn admin-btn" onclick="openAdminModal()" title="Admin Panel">
+                ⚙️
+            </button>
+            <button class="floating-btn tracklist-btn" onclick="openTracklistModal()" title="Tracklist Database">
+                🎵
+            </button>
+        </div>
+
+        <main>
+            <!-- Data Processing Section -->
+            <section class="processing-section" id="processingSection" style="display: none;">
+                <h3>Find Matches in Uploaded File</h3>
+                <div class="mapping-controls">
+                    <div class="mapping-item">
+                        <label for="artistNames">Artist names (comma or newline separated):</label>
+                        <textarea id="artistNames" rows="4" placeholder="e.g. Taylor Swift, Ed Sheeran">KJHK
+CKUA</textarea>
+                    </div>
+                    <div style="margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="process-btn" id="findBtn" onclick="findMatches()">Find Matches</button>
+                        <button class="download-btn" id="downloadCsvBtn" onclick="downloadCSV()" disabled>Download CSV</button>
+                        <button class="reset-btn" onclick="resetApp()">Start Over</button>
+                    </div>
+                    <div id="summary" style="margin-top:12px; color:#4a5568;"></div>
+                    <div id="progress" style="margin-top:8px; color:#718096; font-size:0.95rem;"></div>
+                </div>
+            </section>
+
+            <!-- Results Display Section -->
+            <section class="results-display" id="resultsDisplay" style="display: none;">
+                <div class="results-header">
+                    <h3>Search Results</h3>
+                    <div class="format-toggles">
+                        <button class="format-btn active" onclick="setResultFormat('table')" id="tableFormatBtn">Table View</button>
+                        <button class="format-btn" onclick="setResultFormat('count')" id="countFormatBtn">Song Count</button>
+                        <button class="format-btn" onclick="setResultFormat('station')" id="stationFormatBtn">Station Format</button>
+                        <button class="format-btn" onclick="setResultFormat('spingrid')" id="spingridFormatBtn">Spingrid</button>
+                    </div>
+                </div>
+                
+                <!-- Table Format -->
+                <div id="tableFormat" class="result-format">
+                    <div class="results-table-container">
+                        <table id="resultsTable" class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>Station</th>
+                                    <th>Artist</th>
+                                    <th>Song</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultsTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Count Format -->
+                <div id="countFormat" class="result-format" style="display: none;">
+                    <div class="format-actions">
+                        <button class="download-btn" onclick="copyCountFormatForExcel()">Copy for Excel</button>
+                    </div>
+                    <div class="results-text-container">
+                        <div id="countResultsBody"></div>
+                    </div>
+                </div>
+                
+                <!-- Station Format -->
+                <div id="stationFormat" class="result-format" style="display: none;">
+                    <div class="results-text-container">
+                        <div id="stationResultsBody"></div>
+                    </div>
+                </div>
+                
+                <!-- Spingrid Format -->
+                <div id="spingridFormat" class="result-format" style="display: none;">
+                    <div class="format-actions">
+                        <button class="download-btn" onclick="copySpingridForExcel()">Copy for Excel</button>
+                    </div>
+                    <div class="results-text-container">
+                        <div id="spingridResultsBody"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Load File Section -->
+            <section class="load-section" id="loadSection">
+                <h3>Load Stored File</h3>
+                <p>Load the Excel file that has been uploaded by an admin.</p>
+                <button class="process-btn" onclick="loadStoredFile()">Load File</button>
+            </section>
+        </main>
+
+        <!-- Admin Modal -->
+        <div id="adminModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Admin Panel</h3>
+                    <button class="close-btn" onclick="closeAdminModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="admin-controls">
+                        <input type="password" id="adminPassword" placeholder="Admin password">
+                        <input type="file" id="adminFile" accept=".xlsx,.xls">
+                        <button class="process-btn" onclick="adminUpload()">Upload/Replace</button>
+                        <button class="reset-btn" onclick="adminDelete()">Delete</button>
+                        <button class="download-btn" onclick="adminRefreshStatus()">Refresh Status</button>
+                    </div>
+                    <div id="adminStatus" class="admin-status"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tracklist Modal -->
+        <div id="tracklistModal" class="modal">
+            <div class="modal-content large">
+                <div class="modal-header">
+                    <h3>Tracklist Database</h3>
+                    <button class="close-btn" onclick="closeTracklistModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="tracklist-controls">
+                        <div class="tracklist-input">
+                            <label for="artistName">Artist Name:</label>
+                            <input type="text" id="artistName" placeholder="Enter artist name">
+                        </div>
+                        <div class="tracklist-input">
+                            <label for="songName">Song Name:</label>
+                            <input type="text" id="songName" placeholder="Enter song name">
+                        </div>
+                        <div class="tracklist-actions">
+                            <button class="process-btn" onclick="addSongToTracklist()">Add Song</button>
+                            <button class="reset-btn" onclick="clearTracklist()">Clear All</button>
+                        </div>
+                    </div>
+                    
+                    <div class="tracklist-bulk-add">
+                        <h4>Bulk Add Songs</h4>
+                        <div class="bulk-add-controls">
+                            <div class="tracklist-input">
+                                <label for="bulkArtistName">Artist Name:</label>
+                                <input type="text" id="bulkArtistName" placeholder="Enter artist name">
+                            </div>
+                            <div class="tracklist-input">
+                                <label for="bulkSongNames">Song Names (one per line):</label>
+                                <textarea id="bulkSongNames" rows="4" placeholder="Enter song names, one per line:&#10;Song 1&#10;Song 2&#10;Song 3"></textarea>
+                            </div>
+                            <div class="tracklist-actions">
+                                <button class="download-btn" onclick="addMultipleSongs()">Add All Songs</button>
+                                <button class="reset-btn" onclick="clearBulkInputs()">Clear</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="tracklist-display">
+                        <h4>Current Tracklists</h4>
+                        <div id="tracklistContainer" class="tracklist-container">
+                            <!-- Tracklists will be displayed here -->
+                        </div>
+                    </div>
+                    
+                    <div class="tracklist-import">
+                        <h4>Import/Export</h4>
+                        <div class="import-export-controls">
+                            <button class="process-btn" onclick="exportTracklists()">Export Database</button>
+                            <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importTracklists()">
+                            <button class="download-btn" onclick="document.getElementById('importFile').click()">Import Database</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
