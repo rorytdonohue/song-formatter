@@ -6,6 +6,26 @@
     <title>Song Play Formatter</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // Initialize Supabase client - config will be loaded from server
+        let supabaseClient = null;
+        
+        async function initSupabase() {
+            try {
+                const response = await fetch('/api/config');
+                const config = await response.json();
+                window.SUPABASE_CONFIG = config;
+                supabaseClient = supabase.createClient(config.url, config.anonKey);
+                console.log('Supabase client initialized');
+            } catch (error) {
+                console.error('Failed to initialize Supabase:', error);
+            }
+        }
+        
+        // Initialize on page load
+        initSupabase();
+    </script>
 </head>
 <body>
     <div class="container">

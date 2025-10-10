@@ -129,7 +129,11 @@ function parseArtistSong(raw, artistSet) {
     const byMatch = str.match(/^(.+?)\s+by[:\-]?\s+(.+)$/i);
     if (byMatch) {
         const song = byMatch[1].trim();
-        const artist = byMatch[2].trim();
+        let artist = byMatch[2].trim();
+        
+        // Strip out common station suffixes like "now on KUTX 98.9 FM"
+        artist = artist.replace(/\s+(now\s+on|playing\s+on)\s+.+$/i, '').trim();
+        
         return { artist, song };
     }
 
@@ -873,20 +877,118 @@ async function adminDelete() {
 }
 
 // Tracklist Database Functions
-function loadTracklistDatabase() {
-    const stored = localStorage.getItem('tracklistDatabase');
-    if (stored) {
-        try {
-            tracklistDatabase = JSON.parse(stored);
-        } catch (e) {
-            console.error('Error loading tracklist database:', e);
-            tracklistDatabase = {};
+async function loadTracklistDatabase() {
+    try {
+        // Try Supabase first if available
+        if (supabaseClient) {
+            try {
+                const { data, error } = await supabaseClient.rpc('get_tracklists_json');
+                if (!error && data) {
+                    tracklistDatabase = data;
+                    console.log('Tracklist loaded from Supabase');
+                    // Backup to localStorage
+                    localStorage.setItem('tracklistDatabase', JSON.stringify(tracklistDatabase));
+                    return;
+                }
+            } catch (supabaseError) {
+                console.warn('Supabase fetch failed, trying API fallback:', supabaseError);
+            }
+        }
+        
+        // Fallback to REST API
+        const response = await fetch('/api/tracklist');
+        if (response.ok) {
+            tracklistDatabase = await response.json();
+            console.log('Tracklist loaded from API');
+            // Backup to localStorage
+            localStorage.setItem('tracklistDatabase', JSON.stringify(tracklistDatabase));
+        } else {
+            // Fallback to localStorage if server fails
+            const stored = localStorage.getItem('tracklistDatabase');
+            if (stored) {
+                tracklistDatabase = JSON.parse(stored);
+                console.log('Tracklist loaded from localStorage (server unavailable)');
+            }
+        }
+    } catch (e) {
+        console.error('Error loading tracklist database:', e);
+        // Fallback to localStorage
+        const stored = localStorage.getItem('tracklistDatabase');
+        if (stored) {
+            try {
+                tracklistDatabase = JSON.parse(stored);
+                console.log('Tracklist loaded from localStorage (error fallback)');
+            } catch (parseError) {
+                console.error('Error parsing localStorage tracklist:', parseError);
+                tracklistDatabase = {};
+            }
         }
     }
 }
 
-function saveTracklistDatabase() {
-    localStorage.setItem('tracklistDatabase', JSON.stringify(tracklistDatabase));
+async function saveTracklistDatabase() {
+    try {
+        // Always save to localStorage as backup
+        localStorage.setItem('tracklistDatabase', JSON.stringify(tracklistDatabase));
+        
+        // Try Supabase direct client first if available
+        if (supabaseClient) {
+            try {
+                // Convert to rows for Supabase
+                const rows = [];
+                for (const [artist, songs] of Object.entries(tracklistDatabase)) {
+                    for (const song of songs) {
+                        rows.push({
+                            artist_name: artist,
+                            song_name: song
+                        });
+                    }
+                }
+                
+                if (rows.length > 0) {
+                    // Delete all existing and insert new ones
+                    const { error: deleteError } = await supabaseClient
+                        .from('tracklists')
+                        .delete()
+                        .neq('id', '00000000-0000-0000-0000-000000000000');
+                    
+                    if (deleteError) {
+                        console.warn('Supabase delete warning:', deleteError);
+                    }
+                    
+                    const { error: insertError } = await supabaseClient
+                        .from('tracklists')
+                        .insert(rows);
+                    
+                    if (!insertError) {
+                        console.log('Tracklist saved to Supabase');
+                        return;
+                    } else {
+                        console.warn('Supabase insert failed, trying API fallback:', insertError);
+                    }
+                }
+            } catch (supabaseError) {
+                console.warn('Supabase save failed, trying API fallback:', supabaseError);
+            }
+        }
+        
+        // Fallback to REST API
+        const response = await fetch('/api/tracklist', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(tracklistDatabase)
+        });
+        
+        if (response.ok) {
+            console.log('Tracklist saved to API');
+        } else {
+            console.error('Failed to save tracklist to API');
+        }
+    } catch (e) {
+        console.error('Error saving tracklist database:', e);
+    }
 }
 
 function addSongToTracklist() {
