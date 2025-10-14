@@ -256,12 +256,20 @@ app.post('/api/tracklist', async (req, res) => {
             });
         }
 
-        if (rows.length === 0) {
-            return res.json({ success: true, message: 'No data to save' });
+        // Always clear existing rows first to support full deletion when rows is empty
+        const { error: deleteAllError } = await supabase
+            .from('tracklists')
+            .delete()
+            .neq('id', '00000000-0000-0000-0000-000000000000');
+
+        if (deleteAllError) {
+            console.error('Error clearing tracklist:', deleteAllError);
+            return res.status(500).json({ error: 'Failed to clear existing tracklist' });
         }
 
-        // Delete all existing tracklists and insert new ones (replace strategy)
-        await supabase.from('tracklists').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (rows.length === 0) {
+            return res.json({ success: true, message: 'Tracklist cleared' });
+        }
 
         // Insert new data
         const { error } = await supabase

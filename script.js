@@ -1091,6 +1091,7 @@ function removeSongFromTracklist(artistName, songName) {
                 delete tracklistDatabase[artistName];
             }
             
+            // Persist full replacement to server so deletions are honored
             saveTracklistDatabase();
             displayTracklists();
         }
