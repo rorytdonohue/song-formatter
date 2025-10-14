@@ -613,8 +613,9 @@ function copySpingridForExcel() {
             artist.toLowerCase() === artistLower
         );
         
-        // Add artist header
-        excelData += `\n${artistName.toUpperCase()}\n`;
+        // Add artist header with column labels
+        excelData += `\n${artistName.toUpperCase()}\t\t\n`;
+        excelData += `Song\tSpins\tStations\n`;
         
         if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
             // Artist has tracks in database - show all their songs
