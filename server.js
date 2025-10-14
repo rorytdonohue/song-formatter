@@ -247,12 +247,13 @@ app.post('/api/tracklist', async (req, res) => {
         // Convert from { "Artist": ["song1", "song2"] } to array of rows
         const rows = [];
         for (const [artist, songs] of Object.entries(tracklistData)) {
-            for (const song of songs) {
+            songs.forEach((song, index) => {
                 rows.push({
                     artist_name: artist,
-                    song_name: song
+                    song_name: song,
+                    position: index + 1
                 });
-            }
+            });
         }
 
         if (rows.length === 0) {
@@ -288,11 +289,22 @@ app.post('/api/tracklist/add', async (req, res) => {
             return res.status(400).json({ error: 'Artist and song are required' });
         }
 
+        // Determine next position for this artist
+        const { data: maxPosData } = await supabase
+            .from('tracklists')
+            .select('position')
+            .eq('artist_name', artist)
+            .order('position', { ascending: false, nullsFirst: false })
+            .limit(1);
+
+        const nextPosition = (maxPosData && maxPosData.length > 0 && maxPosData[0].position) ? (maxPosData[0].position + 1) : 1;
+
         const { data, error } = await supabase
             .from('tracklists')
             .insert({
                 artist_name: artist,
-                song_name: song
+                song_name: song,
+                position: nextPosition
             })
             .select()
             .single();

@@ -510,6 +510,7 @@ function displaySpingridFormat(matches) {
         if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
             // Artist has tracks in database - show all their songs
             const songs = tracklistDatabase[tracklistArtist];
+            // songs are stored in insertion order; do not sort
             songs.forEach(songName => {
                 // Check if this song has spins
                 const songSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];

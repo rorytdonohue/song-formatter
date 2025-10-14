@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS tracklists (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     artist_name TEXT NOT NULL,
     song_name TEXT NOT NULL,
+    position INTEGER,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(artist_name, song_name)
@@ -97,7 +98,7 @@ BEGIN
     FROM (
         SELECT 
             artist_name,
-            jsonb_agg(song_name ORDER BY created_at) as songs
+            jsonb_agg(song_name ORDER BY position NULLS LAST, created_at) as songs
         FROM tracklists
         GROUP BY artist_name
     ) grouped;
