@@ -510,16 +510,10 @@ function displaySpingridFormat(matches, containerId) {
     container.innerHTML = html;
 }
 
-// Merge spingrids
+// Simple merge function (placeholder for now)
 function mergeSpingrids() {
-    // Combine both datasets
-    const mergedMatches = [...csvMatches, ...excelMatches];
-    
-    // Update the main matches array
-    matches = mergedMatches;
-    
-    // Show merged spingrid
-    showMergedSpingrid();
+    // For now, just show a simple message
+    alert('Merge functionality will be added later. For now, you can see both datasets separately.');
 }
 
 // Show both CSV and Excel results within Spinitron section
@@ -528,10 +522,6 @@ function showSpinitronWithBothResults() {
     resultsDisplay.innerHTML = `
         <div class="results-header">
             <h3>Spinitron Results</h3>
-            <div class="format-toggles">
-                <button class="format-btn active" onclick="showSpinitronWithBothResults()" id="spinitronFormatBtn">Spinitron</button>
-                <button class="format-btn" onclick="showMergedSpingrid()" id="mergedFormatBtn">Merged</button>
-            </div>
         </div>
         
         <div class="spinitron-results-container">
@@ -544,10 +534,6 @@ function showSpinitronWithBothResults() {
                 <div class="spinitron-content" id="excelSpinitronContent"></div>
             </div>
         </div>
-        
-        <div class="merge-controls">
-            <button class="process-btn" onclick="mergeSpingrids()">Merge Both Results</button>
-        </div>
     `;
     
     // Display both spingrids
@@ -555,25 +541,9 @@ function showSpinitronWithBothResults() {
     displaySpingridFormat(excelMatches, 'excelSpinitronContent');
 }
 
-// Show merged spingrid
+// Placeholder for merged spingrid (simplified for now)
 function showMergedSpingrid() {
-    const resultsDisplay = document.getElementById('resultsDisplay');
-    resultsDisplay.innerHTML = `
-        <div class="results-header">
-            <h3>Merged Spingrid (${matches.length} total spins)</h3>
-            <div class="format-toggles">
-                <button class="format-btn" onclick="showSpinitronWithBothResults()" id="spinitronFormatBtn">Spinitron</button>
-                <button class="format-btn active" onclick="showMergedSpingrid()" id="mergedFormatBtn">Merged</button>
-            </div>
-        </div>
-        
-        <div class="results-text-container">
-            <div id="mergedSpingridContent"></div>
-        </div>
-    `;
-    
-    // Display merged spingrid
-    displaySpingridFormat(matches, 'mergedSpingridContent');
+    alert('Merged view will be added later. For now, you can see both datasets separately.');
 }
 
 // Load file from server
