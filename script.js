@@ -2,6 +2,8 @@
 let workbookRef = null; // keep workbook to scan all sheets
 let headersBySheet = {}; // cache headers per sheet
 let matches = []; // { station, artist, song }
+let csvMatches = []; // CSV data matches
+let excelMatches = []; // Excel data matches
 let tracklistDatabase = {}; // { artistName: [song1, song2, ...] }
 let currentResultFormat = 'table'; // Current display format
 const FUZZY_THRESHOLD = 0.85; // 85% similarity for fuzzy matching
@@ -169,6 +171,9 @@ function processCsvData(csvData) {
         return;
     }
     
+    // Store CSV data separately
+    csvMatches = [...matches];
+    
     // Show the results display
     const resultsDisplay = document.getElementById('resultsDisplay');
     resultsDisplay.style.display = 'block';
@@ -179,13 +184,16 @@ function processCsvData(csvData) {
     // Set up the artist names input with found artists
     setupCsvArtistInput(foundArtists);
     
-    // Display results in current format
+    // Add Find Matches button for Excel data
+    addFindMatchesButton();
+    
+    // Display CSV results in current format
     displayResults(matches);
     
     // Update summary
     const summaryEl = document.getElementById('summary');
     if (summaryEl) {
-        summaryEl.textContent = `${matches.length} spins loaded from CSV file. Found ${foundArtists.length} artists: ${foundArtists.join(', ')}`;
+        summaryEl.textContent = `${matches.length} spins loaded from CSV file. Found ${foundArtists.length} artists: ${foundArtists.join(', ')}. Click "Find Matches" to search Excel file.`;
     }
 }
 
@@ -263,6 +271,280 @@ function detectArtistFromSongs(matches) {
     }
     
     return null;
+}
+
+// Add Find Matches button for Excel data
+function addFindMatchesButton() {
+    const summaryEl = document.getElementById('summary');
+    if (summaryEl) {
+        const button = document.createElement('button');
+        button.className = 'process-btn';
+        button.textContent = 'Find Matches in Excel';
+        button.onclick = findExcelMatches;
+        button.style.marginTop = '10px';
+        summaryEl.appendChild(button);
+    }
+}
+
+// Find matches in Excel file for the same artist
+async function findExcelMatches() {
+    if (!workbookRef) {
+        alert('Excel file not loaded. Please load the Excel file first.');
+        return;
+    }
+    
+    // Get the artist from CSV data
+    const csvArtist = csvMatches.length > 0 ? csvMatches[0].artist : '';
+    if (!csvArtist) {
+        alert('No artist found in CSV data.');
+        return;
+    }
+    
+    // Set up artist search for Excel
+    const artistNamesTextarea = document.getElementById('artistNames');
+    if (artistNamesTextarea) {
+        artistNamesTextarea.value = csvArtist;
+    }
+    
+    // Run the existing findMatches function but store results separately
+    await findMatchesForExcel();
+    
+    // Show side-by-side spingrids
+    showSideBySideSpingrids();
+}
+
+// Modified findMatches function for Excel data
+async function findMatchesForExcel() {
+    if (!workbookRef) {
+        alert('Please load a file first.');
+        return;
+    }
+    
+    // parse artist names
+    const rawArtists = document.getElementById('artistNames').value || '';
+    const artistList = rawArtists
+        .split(/\n|,/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+    const artistSet = new Set(artistList.map(a => a.toLowerCase()))
+    if (artistSet.size === 0) {
+        alert('Please enter at least one artist name.');
+        return;
+    }
+    
+    excelMatches = [];
+    const summary = { rowsScanned: 0, sheetsScanned: 0 };
+    const progressEl = document.getElementById('progress');
+    progressEl.textContent = 'Searching Excel file...';
+    
+    const sheetNames = workbookRef.SheetNames;
+    for (let s = 0; s < sheetNames.length; s++) {
+        const sheetName = sheetNames[s];
+        progressEl.textContent = `Scanning sheet ${s + 1}/${sheetNames.length}: ${sheetName}...`;
+        // Yield to UI before heavy work
+        await new Promise(r => setTimeout(r, 0));
+        
+        const ws = workbookRef.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        if (!rows || rows.length < 2) continue;
+        summary.sheetsScanned++;
+        
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            summary.rowsScanned++;
+            
+            // Extract artist/song from up to first 5 columns robustly
+            const extracted = extractArtistSongFromRow(row, artistList, artistSet);
+            let artist = extracted.artist;
+            let song = extracted.song;
+            
+            if (!artist || !song) continue;
+            if (artistSet.has(artist.toLowerCase())) {
+                // Check if song is in tracklist database (if available)
+                const hasTracklist = Object.keys(tracklistDatabase).length > 0;
+                if (hasTracklist) {
+                    const tlMatch = matchTracklistFuzzy(artist, song);
+                    if (tlMatch.ok) {
+                        // Canonicalize artist and song to database values so downstream lookups align
+                        excelMatches.push({ station: sheetName, artist: tlMatch.artist, song: tlMatch.song });
+                    } else {
+                        // Artist not in tracklist database - still return the spin
+                        excelMatches.push({ station: sheetName, artist, song });
+                    }
+                } else {
+                    // No tracklist database - return all results
+                    excelMatches.push({ station: sheetName, artist, song });
+                }
+            }
+            // Yield occasionally on large rows to keep UI responsive
+            if (i % 1000 === 0) {
+                await new Promise(r => setTimeout(r, 0));
+            }
+        }
+    }
+    
+    progressEl.textContent = '';
+}
+
+// Show side-by-side spingrids
+function showSideBySideSpingrids() {
+    const resultsDisplay = document.getElementById('resultsDisplay');
+    resultsDisplay.innerHTML = `
+        <div class="results-header">
+            <h3>Spingrid Comparison</h3>
+            <div class="format-toggles">
+                <button class="format-btn active" onclick="showSideBySideSpingrids()" id="comparisonFormatBtn">Side by Side</button>
+                <button class="format-btn" onclick="showMergedSpingrid()" id="mergedFormatBtn">Merged</button>
+            </div>
+        </div>
+        
+        <div class="side-by-side-container">
+            <div class="spingrid-panel">
+                <h4>CSV Data (${csvMatches.length} spins)</h4>
+                <div class="spingrid-content" id="csvSpingridContent"></div>
+            </div>
+            <div class="spingrid-panel">
+                <h4>Excel Data (${excelMatches.length} spins)</h4>
+                <div class="spingrid-content" id="excelSpingridContent"></div>
+            </div>
+        </div>
+        
+        <div class="merge-controls">
+            <button class="process-btn" onclick="mergeSpingrids()">Merge Spingrids</button>
+        </div>
+    `;
+    
+    // Display both spingrids
+    displaySpingridFormat(csvMatches, 'csvSpingridContent');
+    displaySpingridFormat(excelMatches, 'excelSpingridContent');
+}
+
+// Display spingrid format for specific container
+function displaySpingridFormat(matches, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    if (matches.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #718096;">No data available.</p>';
+        return;
+    }
+    
+    // Get the artist list from the input
+    const rawArtists = document.getElementById('artistNames').value || '';
+    const artistList = rawArtists
+        .split(/\n|,/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+    
+    if (artistList.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #718096;">No artists entered for search.</p>';
+        return;
+    }
+    
+    // Group matches by artist and song for spin counts
+    const spinCounts = {};
+    matches.forEach(match => {
+        if (!spinCounts[match.artist]) {
+            spinCounts[match.artist] = {};
+        }
+        if (!spinCounts[match.artist][match.song]) {
+            spinCounts[match.artist][match.song] = {};
+        }
+        if (!spinCounts[match.artist][match.song][match.station]) {
+            spinCounts[match.artist][match.song][match.station] = 0;
+        }
+        spinCounts[match.artist][match.song][match.station]++;
+    });
+    
+    let html = '';
+    
+    // Process each artist from the search list (in order)
+    artistList.forEach(artistName => {
+        const artistLower = artistName.toLowerCase();
+        
+        // Find matching artist in tracklist database (case-insensitive)
+        const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
+            artist.toLowerCase() === artistLower
+        );
+        
+        // Create a separate section for each artist
+        html += `<div class="artist-section">`;
+        html += `<div class="artist-header">${escapeHtml(artistName.toUpperCase())}</div>`;
+        
+        if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
+            // Artist has tracks in database - show all their songs
+            const songs = tracklistDatabase[tracklistArtist];
+            songs.forEach(songName => {
+                // Check if this song has spins
+                const songSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];
+                
+                if (songSpins) {
+                    // Song has spins - show count and stations
+                    const totalCount = Object.values(songSpins).reduce((sum, count) => sum + count, 0);
+                    const stationList = Object.entries(songSpins)
+                        .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
+                        .join(', ');
+                    
+                    html += `<div class="song-count-entry">`;
+                    html += `<span class="song-name-cell">${escapeHtml(songName)}</span>`;
+                    html += `<span class="count-cell">${totalCount}</span>`;
+                    html += `<span class="station-cell">${escapeHtml(stationList)}</span>`;
+                    html += `</div>`;
+                } else {
+                    // Song has no spins - show empty
+                    html += `<div class="song-count-entry">`;
+                    html += `<span class="song-name-cell">${escapeHtml(songName)}</span>`;
+                    html += `<span class="count-cell"></span>`;
+                    html += `<span class="station-cell"></span>`;
+                    html += `</div>`;
+                }
+            });
+        } else {
+            // Artist not in tracklist database - show empty entry
+            html += `<div class="song-count-entry">`;
+            html += `<span class="song-name-cell">No tracks in database</span>`;
+            html += `<span class="count-cell"></span>`;
+            html += `<span class="station-cell"></span>`;
+            html += `</div>`;
+        }
+        
+        html += `</div>`;
+    });
+    
+    container.innerHTML = html;
+}
+
+// Merge spingrids
+function mergeSpingrids() {
+    // Combine both datasets
+    const mergedMatches = [...csvMatches, ...excelMatches];
+    
+    // Update the main matches array
+    matches = mergedMatches;
+    
+    // Show merged spingrid
+    showMergedSpingrid();
+}
+
+// Show merged spingrid
+function showMergedSpingrid() {
+    const resultsDisplay = document.getElementById('resultsDisplay');
+    resultsDisplay.innerHTML = `
+        <div class="results-header">
+            <h3>Merged Spingrid (${matches.length} total spins)</h3>
+            <div class="format-toggles">
+                <button class="format-btn" onclick="showSideBySideSpingrids()" id="comparisonFormatBtn">Side by Side</button>
+                <button class="format-btn active" onclick="showMergedSpingrid()" id="mergedFormatBtn">Merged</button>
+            </div>
+        </div>
+        
+        <div class="results-text-container">
+            <div id="mergedSpingridContent"></div>
+        </div>
+    `;
+    
+    // Display merged spingrid
+    displaySpingridFormat(matches, 'mergedSpingridContent');
 }
 
 // Load file from server
