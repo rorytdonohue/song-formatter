@@ -30,33 +30,33 @@
 <body>
     <div class="container">
         <header>
-            <h1>🎵 autobox3000v1.0.0.6.9.6.9</h1>
+            <h1>xanadubox</h1>
             <p id="confuciusQuote">Loading wisdom...</p>
         </header>
 
         <!-- Floating Action Buttons -->
         <div class="floating-buttons">
             <button class="floating-btn admin-btn" onclick="openAdminModal()" title="Admin Panel">
-                ⚙️
+                Settings
             </button>
             <button class="floating-btn tracklist-btn" onclick="openTracklistModal()" title="Tracklist Database">
-                🎵
+                Tracklist DB
             </button>
         </div>
 
         <main>
             <!-- Data Processing Section -->
             <section class="processing-section" id="processingSection" style="display: none;">
-                <h3>Find Matches in Uploaded File</h3>
+                <h3>find matches in uploaded file</h3>
                 <div class="mapping-controls">
                     <div class="mapping-item">
-                        <label for="artistNames">Artist names (comma or newline separated):</label>
-                        <textarea id="artistNames" rows="4" placeholder="e.g. Taylor Swift, Ed Sheeran"></textarea>
+                        <label for="artistNames">artist names (comma or newline separated):</label>
+                        <textarea id="artistNames" rows="4" placeholder="enter here"></textarea>
                     </div>
                     <div style="margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap;">
-                        <button class="process-btn" id="findBtn" onclick="findMatches()">Find Matches</button>
+                        <button class="process-btn" id="findBtn" onclick="findMatches()">find matches</button>
                         <button class="download-btn" id="downloadCsvBtn" onclick="downloadCSV()" disabled>Download CSV</button>
-                        <button class="reset-btn" onclick="resetApp()">Cancel</button>
+                        <button class="reset-btn" onclick="resetApp()">cancel</button>
                     </div>
                     <div id="summary" style="margin-top:12px; color:#4a5568;"></div>
                     <div id="progress" style="margin-top:8px; color:#718096; font-size:0.95rem;"></div>
@@ -66,7 +66,7 @@
             <!-- Results Display Section -->
             <section class="results-display" id="resultsDisplay" style="display: none;">
                 <div class="results-header">
-                    <h3>Search Results</h3>
+                    <h3>search results</h3>
                     <div class="format-toggles">
                         <button class="format-btn active" onclick="setResultFormat('table')" id="tableFormatBtn">Table View</button>
                         <button class="format-btn" onclick="setResultFormat('count')" id="countFormatBtn">Song Count</button>
@@ -81,9 +81,9 @@
                         <table id="resultsTable" class="results-table">
                             <thead>
                                 <tr>
-                                    <th>Station</th>
-                                    <th>Artist</th>
-                                    <th>Song</th>
+                                    <th>station</th>
+                                    <th>artist</th>
+                                    <th>song</th>
                                 </tr>
                             </thead>
                             <tbody id="resultsTableBody">
@@ -95,7 +95,7 @@
                 <!-- Count Format -->
                 <div id="countFormat" class="result-format" style="display: none;">
                     <div class="format-actions">
-                        <button class="download-btn" onclick="copyCountFormatForExcel()">Copy for Excel</button>
+                        <button class="download-btn" onclick="copyCountFormatForExcel()">copy for excel</button>
                     </div>
                     <div class="results-text-container">
                         <div id="countResultsBody"></div>
@@ -112,7 +112,7 @@
                 <!-- Spingrid Format -->
                 <div id="spingridFormat" class="result-format" style="display: none;">
                     <div class="format-actions">
-                        <button class="download-btn" onclick="copySpingridForExcel()">Copy for Excel</button>
+                        <button class="download-btn" onclick="copySpingridForExcel()">copy for excel</button>
                     </div>
                     <div class="results-text-container">
                         <div id="spingridResultsBody"></div>
