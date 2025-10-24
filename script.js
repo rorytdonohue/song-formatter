@@ -132,6 +132,14 @@ function processCsvData(csvData) {
         return;
     }
     
+    // Find artists from CSV that match tracklist database
+    const foundArtists = findArtistsInCsvData(matches);
+    
+    if (foundArtists.length === 0) {
+        alert('No artists from the CSV match the tracklist database. Please add artists to the tracklist database first.');
+        return;
+    }
+    
     // Show the results display
     const resultsDisplay = document.getElementById('resultsDisplay');
     resultsDisplay.style.display = 'block';
@@ -139,13 +147,45 @@ function processCsvData(csvData) {
     // Hide the load section
     document.getElementById('loadSection').style.display = 'none';
     
+    // Set up the artist names input with found artists
+    setupCsvArtistInput(foundArtists);
+    
     // Display results in current format
     displayResults(matches);
     
     // Update summary
     const summaryEl = document.getElementById('summary');
     if (summaryEl) {
-        summaryEl.textContent = `${matches.length} spins loaded from CSV file.`;
+        summaryEl.textContent = `${matches.length} spins loaded from CSV file. Found ${foundArtists.length} artists: ${foundArtists.join(', ')}`;
+    }
+}
+
+// Find artists from CSV data that match tracklist database
+function findArtistsInCsvData(matches) {
+    const foundArtists = new Set();
+    
+    matches.forEach(match => {
+        const csvArtist = match.artist;
+        
+        // Check if this artist matches any in the tracklist database
+        const tracklistArtists = Object.keys(tracklistDatabase);
+        tracklistArtists.forEach(tracklistArtist => {
+            // Use fuzzy matching to see if CSV artist matches tracklist artist
+            const similarity = similarityRatio(csvArtist, tracklistArtist);
+            if (similarity >= FUZZY_THRESHOLD) {
+                foundArtists.add(tracklistArtist);
+            }
+        });
+    });
+    
+    return Array.from(foundArtists);
+}
+
+// Set up the artist names input with found artists
+function setupCsvArtistInput(foundArtists) {
+    const artistNamesTextarea = document.getElementById('artistNames');
+    if (artistNamesTextarea) {
+        artistNamesTextarea.value = foundArtists.join('\n');
     }
 }
 
