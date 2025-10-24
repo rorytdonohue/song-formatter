@@ -122,14 +122,35 @@ function processCsvData(csvData) {
         const artist = row['Artist'] || row['artist'] || row['Performer'] || row['performer'] || '';
         const song = row['Song'] || row['song'] || row['Title'] || row['title'] || '';
         
-        if (artist && song) {
-            matches.push({ station, artist, song });
+        if (song) {
+            // If no artist column, we'll need to prompt user for artist name
+            if (artist) {
+                matches.push({ station, artist, song });
+            } else {
+                // Store without artist for now - we'll handle this case
+                matches.push({ station, artist: '', song });
+            }
         }
     });
     
     if (matches.length === 0) {
-        alert('No valid spin data found in CSV. Please check that your CSV has columns for Station, Artist, and Song.');
+        alert('No valid spin data found in CSV. Please check that your CSV has columns for Station and Song.');
         return;
+    }
+    
+    // Check if we have artist data or need to prompt user
+    const hasArtistData = matches.some(match => match.artist);
+    
+    if (!hasArtistData) {
+        // No artist column - prompt user for artist name
+        const artistName = prompt('Your CSV doesn\'t have an Artist column. Please enter the artist name for these songs:');
+        if (!artistName || artistName.trim() === '') {
+            alert('Artist name is required to process the CSV data.');
+            return;
+        }
+        
+        // Add artist name to all matches
+        matches = matches.map(match => ({ ...match, artist: artistName.trim() }));
     }
     
     // Find artists from CSV that match tracklist database
