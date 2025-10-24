@@ -122,8 +122,8 @@
 
             <!-- Spinitron Formatter Section -->
             <section class="load-section" id="loadSection">
-                <h3>Spinitron Formatter</h3>
-                <p>Upload a CSV file with spin data to format and analyze.</p>
+                <h3>spinitron formatter</h3>
+                <p>upload a CSV file with spin data to format and analyze.</p>
                 <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="handleCsvUpload()">
                 <button class="process-btn" onclick="document.getElementById('csvFile').click()">Click to Upload</button>
             </section>
@@ -140,9 +140,9 @@
                     <div class="admin-controls">
                         <input type="password" id="adminPassword" placeholder="Admin password">
                         <input type="file" id="adminFile" accept=".xlsx,.xls">
-                        <button class="process-btn" onclick="adminUpload()">Upload/Replace</button>
-                        <button class="reset-btn" onclick="adminDelete()">Delete</button>
-                        <button class="download-btn" onclick="adminRefreshStatus()">Refresh Status</button>
+                        <button class="process-btn" onclick="adminUpload()">upload/replace</button>
+                        <button class="reset-btn" onclick="adminDelete()"delete</button>
+                        <button class="download-btn" onclick="adminRefreshStatus()">refresh status</button>
                     </div>
                     <div id="adminStatus" class="admin-status"></div>
                 </div>
@@ -153,54 +153,54 @@
         <div id="tracklistModal" class="modal">
             <div class="modal-content large">
                 <div class="modal-header">
-                    <h3>Tracklist Database</h3>
+                    <h3>tracklist database</h3>
                     <button class="close-btn" onclick="closeTracklistModal()">&times;</button>
                 </div>
                 <div class="modal-body">
                     <div class="tracklist-controls">
                         <div class="tracklist-input">
-                            <label for="artistName">Artist Name:</label>
+                            <label for="artistName">artist name:</label>
                             <input type="text" id="artistName" placeholder="Enter artist name">
                         </div>
                         <div class="tracklist-input">
-                            <label for="songName">Song Name:</label>
+                            <label for="songName">song name:</label>
                             <input type="text" id="songName" placeholder="Enter song name">
                         </div>
                         <div class="tracklist-actions">
-                            <button class="process-btn" onclick="addSongToTracklist()">Add Song</button>
-                            <button class="reset-btn" onclick="clearTracklist()">Clear All</button>
+                            <button class="process-btn" onclick="addSongToTracklist()">add song</button>
+                            <button class="reset-btn" onclick="clearTracklist()">clear all</button>
                         </div>
                     </div>
                     
                     <div class="tracklist-bulk-add">
-                        <h4>Bulk Add Songs</h4>
+                        <h4>bulk add songs</h4>
                         <div class="bulk-add-controls">
                             <div class="tracklist-input">
-                                <label for="bulkArtistName">Artist Name:</label>
+                                <label for="bulkArtistName">artist name:</label>
                                 <input type="text" id="bulkArtistName" placeholder="Enter artist name">
                             </div>
                             <div class="tracklist-input">
-                                <label for="bulkSongNames">Song Names (one per line):</label>
+                                <label for="bulkSongNames">song names (one per line):</label>
                                 <textarea id="bulkSongNames" rows="4" placeholder="Enter song names, one per line:&#10;Song 1&#10;Song 2&#10;Song 3"></textarea>
                             </div>
                             <div class="tracklist-actions">
-                                <button class="download-btn" onclick="addMultipleSongs()">Add All Songs</button>
-                                <button class="reset-btn" onclick="clearBulkInputs()">Clear</button>
+                                <button class="download-btn" onclick="addMultipleSongs()">add all songs</button>
+                                <button class="reset-btn" onclick="clearBulkInputs()">clear</button>
                             </div>
                         </div>
                     </div>
                     
                     <div class="tracklist-display">
-                        <h4>Current Tracklists</h4>
+                        <h4>current tracklists</h4>
                         <div id="tracklistContainer" class="tracklist-container">
                             <!-- Tracklists will be displayed here -->
                         </div>
                     </div>
                     
                     <div class="tracklist-import">
-                        <h4>Import/Export</h4>
+                        <h4>import/export</h4>
                         <div class="import-export-controls">
-                            <button class="process-btn" onclick="exportTracklists()">Export Database</button>
+                            <button class="process-btn" onclick="exportTracklists()">export database</button>
                             <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importTracklists()">
                             <button class="download-btn" onclick="document.getElementById('importFile').click()">Import Database</button>
                         </div>
