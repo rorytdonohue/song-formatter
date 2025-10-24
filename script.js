@@ -2266,6 +2266,28 @@ function displayTracklists() {
     container.innerHTML = html;
 }
 
+// Filter tracklists by artist name
+function filterTracklists() {
+    const searchTerm = document.getElementById('tracklistSearch').value.toLowerCase();
+    const artistGroups = document.querySelectorAll('.artist-group');
+    
+    artistGroups.forEach(group => {
+        const artistName = group.querySelector('.artist-name').textContent.toLowerCase();
+        
+        if (artistName.includes(searchTerm)) {
+            group.style.display = 'block';
+        } else {
+            group.style.display = 'none';
+        }
+    });
+}
+
+// Clear tracklist search
+function clearTracklistSearch() {
+    document.getElementById('tracklistSearch').value = '';
+    filterTracklists(); // Show all artists again
+}
+
 function exportTracklists() {
     if (Object.keys(tracklistDatabase).length === 0) {
         alert('No tracklists to export.');
@@ -2453,6 +2475,8 @@ function closeAdminModal() {
 function openTracklistModal() {
     document.getElementById('tracklistModal').style.display = 'block';
     displayTracklists(); // Refresh tracklist display when opening
+    // Clear search when opening modal
+    document.getElementById('tracklistSearch').value = '';
 }
 
 function closeTracklistModal() {
