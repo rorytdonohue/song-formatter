@@ -1302,6 +1302,13 @@ section h3 {
     margin-top: 1rem;
 }
 
+.merged-excel-controls {
+    text-align: center;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e2e8f0;
+}
+
 /* Responsive modal adjustments */
 @media (max-width: 768px) {
     .floating-buttons {

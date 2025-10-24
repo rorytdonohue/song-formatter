@@ -834,6 +834,9 @@ function displayMergedResults(combinedMatches) {
             </div>
         </div>
         <div class="merged-results-content" id="mergedResultsDisplay"></div>
+        <div class="merged-excel-controls" id="mergedExcelControls" style="display: none;">
+            <button class="process-btn" onclick="copyMergedSpingridForExcel()">Copy for Excel</button>
+        </div>
     `;
     
     mergedContent.innerHTML = html;
@@ -848,11 +851,96 @@ function showMergedFormat(format) {
     document.querySelectorAll('#mergedTableFormatBtn, #mergedCountFormatBtn, #mergedStationFormatBtn, #mergedSpingridFormatBtn').forEach(btn => btn.classList.remove('active'));
     document.getElementById(`merged${format.charAt(0).toUpperCase() + format.slice(1)}FormatBtn`).classList.add('active');
     
+    // Show/hide Excel controls based on format
+    const excelControls = document.getElementById('mergedExcelControls');
+    if (excelControls) {
+        excelControls.style.display = format === 'spingrid' ? 'block' : 'none';
+    }
+    
     // Combine both datasets
     const combinedMatches = [...csvMatches, ...excelMatches];
     
     // Display in specified format
     displayResultsInFormat(combinedMatches, 'mergedResultsDisplay', format);
+}
+
+// Copy merged spingrid for Excel
+function copyMergedSpingridForExcel() {
+    const combinedMatches = [...csvMatches, ...excelMatches];
+    
+    if (combinedMatches.length === 0) {
+        alert('No data to copy.');
+        return;
+    }
+    
+    // Get the artist list from the input
+    const rawArtists = document.getElementById('artistNames').value || '';
+    const artistList = rawArtists
+        .split(/\n|,/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+    
+    if (artistList.length === 0) {
+        alert('No artists entered for search.');
+        return;
+    }
+    
+    // Group matches by artist and song for spin counts
+    const spinCounts = {};
+    combinedMatches.forEach(match => {
+        if (!spinCounts[match.artist]) {
+            spinCounts[match.artist] = {};
+        }
+        if (!spinCounts[match.artist][match.song]) {
+            spinCounts[match.artist][match.song] = {};
+        }
+        if (!spinCounts[match.artist][match.song][match.station]) {
+            spinCounts[match.artist][match.song][match.station] = 0;
+        }
+        spinCounts[match.artist][match.song][match.station]++;
+    });
+    
+    let excelData = '';
+    
+    // Process each artist from the search list (in order)
+    artistList.forEach(artistName => {
+        const artistLower = artistName.toLowerCase();
+        
+        // Find matching artist in tracklist database (case-insensitive)
+        const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
+            artist.toLowerCase() === artistLower
+        );
+        
+        if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
+            // Artist has tracks in database - show all their songs
+            const songs = tracklistDatabase[tracklistArtist];
+            songs.forEach(songName => {
+                // Check if this song has spins
+                const songSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];
+                
+                if (songSpins) {
+                    // Song has spins - show count and stations
+                    const totalCount = Object.values(songSpins).reduce((sum, count) => sum + count, 0);
+                    const stationList = Object.entries(songSpins)
+                        .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
+                        .join(', ');
+                    
+                    excelData += `${songName}\t${totalCount}\t${stationList}\n`;
+                } else {
+                    // Song has no spins - show empty
+                    excelData += `${songName}\t\t\n`;
+                }
+            });
+        }
+    });
+    
+    // Copy to clipboard
+    navigator.clipboard.writeText(excelData).then(() => {
+        alert('Merged spingrid data copied to clipboard!');
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+        alert('Failed to copy to clipboard. Please try again.');
+    });
 }
 
 // Placeholder for merged spingrid (simplified for now)
