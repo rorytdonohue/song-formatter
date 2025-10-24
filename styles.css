@@ -16,6 +16,15 @@ body {
     min-height: 100vh;
 }
 
+/* Ensure buttons and titles use IBM Plex Mono */
+button, .process-btn, .format-btn, .floating-btn, .delete-artist-btn {
+    font-family: 'IBM Plex Mono', 'Courier New', monospace;
+}
+
+h1, h2, h3, h4, h5, h6, .artist-header, .modal-header h3 {
+    font-family: 'IBM Plex Mono', 'Courier New', monospace;
+}
+
 .container {
     max-width: 1200px;
     margin: 0 auto;
@@ -43,7 +52,7 @@ header p {
 /* Section Styles */
 section {
     background: white;
-    border-radius: 12px;
+    border-radius: 2px;
     padding: 30px;
     margin-bottom: 30px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.1);
@@ -65,7 +74,7 @@ section h3 {
 /* Upload Area Styles */
 .upload-area {
     border: 3px dashed #cbd5e0;
-    border-radius: 12px;
+    border-radius: 2px;
     padding: 60px 20px;
     text-align: center;
     transition: all 0.3s ease;
@@ -109,7 +118,7 @@ section h3 {
     color: white;
     border: none;
     padding: 12px 30px;
-    border-radius: 25px;
+    border-radius: 2px;
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
@@ -150,7 +159,7 @@ section h3 {
 .mapping-item select {
     padding: 10px;
     border: 2px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 2px;
     font-size: 1rem;
     background: white;
     transition: border-color 0.3s ease;
@@ -166,7 +175,7 @@ section h3 {
     color: white;
     border: none;
     padding: 12px 30px;
-    border-radius: 25px;
+    border-radius: 2px;
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
@@ -196,7 +205,7 @@ section h3 {
     width: 100%;
     padding: 10px 15px;
     border: 2px solid #e2e8f0;
-    border-radius: 25px;
+    border-radius: 2px;
     font-size: 1rem;
     transition: border-color 0.3s ease;
 }
@@ -216,7 +225,7 @@ section h3 {
     border: 2px solid #667eea;
     background: white;
     color: #667eea;
-    border-radius: 20px;
+    border-radius: 2px;
     font-size: 0.9rem;
     font-weight: 600;
     cursor: pointer;
@@ -232,7 +241,7 @@ section h3 {
     max-height: 300px;
     overflow-y: auto;
     border: 2px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 2px;
     padding: 15px;
     margin-bottom: 20px;
     background: #f7fafc;
@@ -265,7 +274,7 @@ section h3 {
     color: white;
     border: none;
     padding: 12px 30px;
-    border-radius: 25px;
+    border-radius: 2px;
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
@@ -295,7 +304,7 @@ section h3 {
 .download-btn, .reset-btn {
     padding: 10px 20px;
     border: none;
-    border-radius: 20px;
+    border-radius: 2px;
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
@@ -326,14 +335,14 @@ section h3 {
     max-height: 500px;
     overflow-y: auto;
     border: 2px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 2px;
     background: #f7fafc;
 }
 
 .station-group {
     margin-bottom: 20px;
     border: 1px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 2px;
     background: white;
     overflow: hidden;
 }
@@ -381,7 +390,7 @@ section h3 {
     background: #667eea;
     color: white;
     padding: 4px 8px;
-    border-radius: 12px;
+    border-radius: 2px;
     font-size: 0.8rem;
     font-weight: 600;
 }
@@ -445,7 +454,7 @@ section h3 {
     border: 2px solid #e2e8f0;
     background: white;
     color: #4a5568;
-    border-radius: 20px;
+    border-radius: 2px;
     font-size: 0.9rem;
     font-weight: 600;
     cursor: pointer;
@@ -482,7 +491,7 @@ section h3 {
     max-height: 600px;
     overflow-y: auto;
     border: 2px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 2px;
     background: white;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     padding: 20px;
@@ -530,7 +539,7 @@ section h3 {
     color: #667eea;
     background: #f0f4ff;
     padding: 2px 8px;
-    border-radius: 4px;
+    border-radius: 2px;
     font-size: 0.9rem;
 }
 
@@ -576,7 +585,7 @@ section h3 {
     max-height: 600px;
     overflow-y: auto;
     border: 2px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 2px;
     background: white;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 }
@@ -670,7 +679,7 @@ section h3 {
 .tracklist-input input {
     padding: 10px 12px;
     border: 2px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 2px;
     font-size: 1rem;
     transition: border-color 0.3s ease;
 }
@@ -714,7 +723,7 @@ section h3 {
 .bulk-add-controls .tracklist-input textarea {
     padding: 10px 12px;
     border: 2px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 2px;
     font-size: 1rem;
     font-family: inherit;
     resize: vertical;
@@ -739,14 +748,14 @@ section h3 {
     max-height: 400px;
     overflow-y: auto;
     border: 2px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 2px;
     background: #f7fafc;
 }
 
 .artist-group {
     background: white;
     margin-bottom: 10px;
-    border-radius: 6px;
+    border-radius: 2px;
     overflow: hidden;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
@@ -766,7 +775,7 @@ section h3 {
     color: white;
     border: none;
     padding: 6px 10px;
-    border-radius: 4px;
+    border-radius: 2px;
     font-size: 0.8rem;
     cursor: pointer;
     transition: background-color 0.2s ease;
@@ -784,7 +793,7 @@ section h3 {
 .artist-count {
     background: rgba(255,255,255,0.2);
     padding: 4px 8px;
-    border-radius: 12px;
+    border-radius: 2px;
     font-size: 0.8rem;
 }
 
@@ -816,7 +825,7 @@ section h3 {
     color: white;
     border: none;
     padding: 4px 8px;
-    border-radius: 4px;
+    border-radius: 2px;
     font-size: 0.7rem;
     cursor: pointer;
     transition: background-color 0.2s ease;
@@ -890,7 +899,7 @@ section h3 {
 .floating-btn {
     width: auto;
     height: 50px;
-    border-radius: 25px;
+    border-radius: 2px;
     border: none;
     font-size: 14px;
     font-weight: 500;
@@ -936,7 +945,7 @@ section h3 {
     background-color: white;
     margin: 2% auto;
     padding: 0;
-    border-radius: 12px;
+    border-radius: 2px;
     width: 95%;
     max-width: 500px;
     max-height: 90vh;
@@ -1012,7 +1021,7 @@ section h3 {
 .admin-controls input {
     padding: 10px 12px;
     border: 2px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 2px;
     font-size: 1rem;
 }
 
@@ -1031,7 +1040,7 @@ section h3 {
     font-size: 0.95rem;
     padding: 10px;
     background: #f7fafc;
-    border-radius: 6px;
+    border-radius: 2px;
     border-left: 4px solid #667eea;
 }
 
@@ -1047,7 +1056,7 @@ section h3 {
     color: white;
     border: none;
     padding: 8px 16px;
-    border-radius: 20px;
+    border-radius: 2px;
     font-size: 0.9rem;
     font-weight: 600;
     cursor: pointer;
@@ -1064,7 +1073,7 @@ section h3 {
 .qc-dropdown {
     margin-top: 10px;
     border: 2px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 2px;
     background: #f7fafc;
     max-height: 300px;
     overflow-y: auto;
@@ -1095,7 +1104,7 @@ section h3 {
     color: #667eea;
     background: #f0f4ff;
     padding: 2px 6px;
-    border-radius: 4px;
+    border-radius: 2px;
     font-size: 0.8rem;
 }
 
@@ -1110,7 +1119,7 @@ section h3 {
     color: white;
     border: none;
     padding: 4px 8px;
-    border-radius: 4px;
+    border-radius: 2px;
     font-size: 0.7rem;
     cursor: pointer;
     transition: background-color 0.2s ease;
@@ -1130,7 +1139,7 @@ section h3 {
 
 .spingrid-panel {
     border: 2px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 2px;
     background: white;
     overflow: hidden;
 }
@@ -1163,7 +1172,7 @@ section h3 {
 
 .spinitron-section {
     border: 2px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 2px;
     background: white;
     overflow: hidden;
 }
@@ -1199,7 +1208,7 @@ section h3 {
     padding: 20px;
     background: #f7fafc;
     border: 2px solid #e2e8f0;
-    border-radius: 8px;
+    border-radius: 2px;
 }
 
 .find-matches-header h4 {
@@ -1221,7 +1230,7 @@ section h3 {
 /* Dataset Sections */
 .dataset-section {
     background: white;
-    border-radius: 8px;
+    border-radius: 2px;
     padding: 1.5rem;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     margin-bottom: 2rem;
@@ -1250,7 +1259,7 @@ section h3 {
 /* Merge Section */
 .merge-section {
     background: white;
-    border-radius: 8px;
+    border-radius: 2px;
     padding: 1.5rem;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     margin-top: 2rem;
@@ -1321,7 +1330,7 @@ section h3 {
 .fallback-notice {
     background: #fef3cd;
     border: 1px solid #f6d55c;
-    border-radius: 6px;
+    border-radius: 2px;
     padding: 1rem;
     margin-bottom: 1rem;
 }
@@ -1335,7 +1344,7 @@ section h3 {
 .fallback-info {
     background: #f8f9fa;
     border: 1px solid #dee2e6;
-    border-radius: 8px;
+    border-radius: 2px;
     padding: 1.5rem;
     margin-top: 2rem;
     text-align: center;

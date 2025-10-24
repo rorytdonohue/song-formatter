@@ -2243,7 +2243,7 @@ function displayTracklists() {
                 <div class="artist-header">
                     <span class="artist-name">${escapeHtml(artistName)}</span>
                     <span class="artist-count">${songs.length} songs</span>
-                    <button class="delete-artist-btn" onclick="deleteArtistTracklist('${escapeHtml(artistName)}')" title="Delete entire tracklist for this artist">🗑️</button>
+                    <button class="delete-artist-btn" onclick="deleteArtistTracklist('${escapeHtml(artistName)}')" title="Delete entire tracklist for this artist">Delete All</button>
                 </div>
                 <div class="songs-list">
         `;
