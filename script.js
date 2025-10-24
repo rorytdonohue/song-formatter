@@ -154,7 +154,7 @@ function processCsvData(csvData) {
             // Fallback to manual input if auto-detection fails
             const artistName = prompt('Could not auto-detect artist from songs. Please enter the artist name for these songs:');
             if (!artistName || artistName.trim() === '') {
-                alert('Artist name is required to process the CSV data.');
+                        alert('Artist name is required to process the CSV data.');
                 return;
             }
             
@@ -881,7 +881,7 @@ function copyMergedSpingridForExcel() {
     const combinedMatches = [...csvMatches, ...excelMatches];
     
     if (combinedMatches.length === 0) {
-        alert('No data to copy.');
+        alert('no data to copy.');
         return;
     }
     
@@ -893,7 +893,7 @@ function copyMergedSpingridForExcel() {
         .filter(s => s.length > 0);
     
     if (artistList.length === 0) {
-        alert('No artists entered for search.');
+        alert('no artists entered for search.');
         return;
     }
     
@@ -948,10 +948,10 @@ function copyMergedSpingridForExcel() {
     
     // Copy to clipboard
     navigator.clipboard.writeText(excelData).then(() => {
-        alert('Merged spingrid data copied to clipboard!');
+        alert('merged spingrid data copied to clipboard!');
     }).catch(err => {
         console.error('Failed to copy: ', err);
-        alert('Failed to copy to clipboard. Please try again.');
+        alert('failed to copy to clipboard. please try again.');
     });
 }
 
@@ -1640,7 +1640,7 @@ function copySpingridForExcel() {
         .filter(s => s.length > 0);
     
     if (artistList.length === 0) {
-        alert('No artists entered for search.');
+        alert('no artists entered for search.');
         return;
     }
     
@@ -1706,7 +1706,7 @@ function copySpingridForExcel() {
         alert('Spingrid data copied to clipboard! Paste into Excel and it will format correctly across columns.');
     }).catch(err => {
         console.error('Failed to copy: ', err);
-        alert('Failed to copy to clipboard. Please try again.');
+        alert('failed to copy to clipboard. please try again.');
     });
 }
 
@@ -1774,7 +1774,7 @@ function copyCountFormatForExcel() {
         alert('Data copied to clipboard! Paste into Excel and it will format correctly across columns.');
     }).catch(err => {
         console.error('Failed to copy: ', err);
-        alert('Failed to copy to clipboard. Please try again.');
+        alert('failed to copy to clipboard. please try again.');
     });
 }
 
@@ -2173,13 +2173,10 @@ function addMultipleSongs() {
     }
     
     // Clear bulk inputs
-    clearBulkInputs();
-}
-
-function clearBulkInputs() {
     document.getElementById('bulkArtistName').value = '';
     document.getElementById('bulkSongNames').value = '';
 }
+
 
 function removeSongFromTracklist(artistName, songName) {
     if (tracklistDatabase[artistName]) {
@@ -2214,18 +2211,6 @@ function deleteArtistTracklist(artistName) {
     }
 }
 
-function clearTracklist() {
-    if (Object.keys(tracklistDatabase).length === 0) {
-        alert('Tracklist database is already empty.');
-        return;
-    }
-    
-    if (confirm('Are you sure you want to clear all tracklists? This cannot be undone.')) {
-        tracklistDatabase = {};
-        saveTracklistDatabase();
-        displayTracklists();
-    }
-}
 
 function displayTracklists() {
     const container = document.getElementById('tracklistContainer');

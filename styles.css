@@ -32,9 +32,7 @@ h1, h2, h3, h4, h5, h6, .artist-header, .modal-header h3, .modal-header, .modal-
 /* Confucius quote styling */
 #confuciusQuote {
     margin: 20px 0 40px 0;
-    padding: 15px 20px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
+    color: white;
     font-style: italic;
     text-align: center;
     max-width: 600px;
@@ -56,12 +54,15 @@ header {
 header h1 {
     font-size: 2.5rem;
     margin-bottom: 10px;
+    color: white;
+    font-family: 'IBM Plex Mono', 'Courier New', monospace;
     text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
 }
 
 header p {
     font-size: 1.1rem;
     opacity: 0.9;
+    font-family: 'IBM Plex Mono', 'Courier New', monospace;
 }
 
 /* Section Styles */
