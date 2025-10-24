@@ -275,14 +275,20 @@ function detectArtistFromSongs(matches) {
 
 // Add Find Matches button for Excel data
 function addFindMatchesButton() {
-    const summaryEl = document.getElementById('summary');
-    if (summaryEl) {
-        const button = document.createElement('button');
-        button.className = 'process-btn';
-        button.textContent = 'Find Matches in Excel';
-        button.onclick = findExcelMatches;
-        button.style.marginTop = '10px';
-        summaryEl.appendChild(button);
+    const resultsDisplay = document.getElementById('resultsDisplay');
+    if (resultsDisplay) {
+        const findMatchesSection = document.createElement('div');
+        findMatchesSection.className = 'find-matches-section';
+        findMatchesSection.innerHTML = `
+            <div class="find-matches-header">
+                <h4>Find Matches in Excel File</h4>
+                <p>Search the main Excel database for the same artist</p>
+            </div>
+            <div class="find-matches-controls">
+                <button class="process-btn" onclick="findExcelMatches()">Find Matches in Excel</button>
+            </div>
+        `;
+        resultsDisplay.appendChild(findMatchesSection);
     }
 }
 
@@ -300,35 +306,25 @@ async function findExcelMatches() {
         return;
     }
     
-    // Set up artist search for Excel
-    const artistNamesTextarea = document.getElementById('artistNames');
-    if (artistNamesTextarea) {
-        artistNamesTextarea.value = csvArtist;
-    }
-    
-    // Run the existing findMatches function but store results separately
-    await findMatchesForExcel();
+    // Run the Excel search without touching the main artist input
+    await findMatchesForExcel(csvArtist);
     
     // Show both results within the Spinitron section
     showSpinitronWithBothResults();
 }
 
 // Modified findMatches function for Excel data
-async function findMatchesForExcel() {
+async function findMatchesForExcel(artistName) {
     if (!workbookRef) {
         alert('Please load a file first.');
         return;
     }
     
-    // parse artist names
-    const rawArtists = document.getElementById('artistNames').value || '';
-    const artistList = rawArtists
-        .split(/\n|,/)
-        .map(s => s.trim())
-        .filter(s => s.length > 0);
+    // Use the provided artist name instead of reading from input
+    const artistList = [artistName];
     const artistSet = new Set(artistList.map(a => a.toLowerCase()))
     if (artistSet.size === 0) {
-        alert('Please enter at least one artist name.');
+        alert('No artist name provided.');
         return;
     }
     

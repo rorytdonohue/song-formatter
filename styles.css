@@ -1185,6 +1185,31 @@ section h3 {
     border-top: 2px solid #e2e8f0;
 }
 
+/* Find Matches section */
+.find-matches-section {
+    margin-top: 30px;
+    padding: 20px;
+    background: #f7fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+}
+
+.find-matches-header h4 {
+    color: #2d3748;
+    margin-bottom: 8px;
+    font-size: 1.2rem;
+}
+
+.find-matches-header p {
+    color: #718096;
+    margin-bottom: 15px;
+    font-size: 0.95rem;
+}
+
+.find-matches-controls {
+    text-align: center;
+}
+
 /* Responsive modal adjustments */
 @media (max-width: 768px) {
     .floating-buttons {
