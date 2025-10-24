@@ -17,12 +17,29 @@ body {
 }
 
 /* Ensure consistent fonts */
-button, .process-btn, .format-btn, .floating-btn, .delete-artist-btn {
+*, *::before, *::after {
     font-family: 'IBM Plex Mono', 'Courier New', monospace;
 }
 
-h1, h2, h3, h4, h5, h6 {
+button, .process-btn, .format-btn, .floating-btn, .delete-artist-btn, input, textarea, select {
     font-family: 'IBM Plex Mono', 'Courier New', monospace;
+}
+
+h1, h2, h3, h4, h5, h6, .artist-header, .modal-header h3, .modal-header, .modal-body, .artist-name, .song-name {
+    font-family: 'IBM Plex Mono', 'Courier New', monospace;
+}
+
+/* Confucius quote styling */
+#confuciusQuote {
+    margin: 20px 0 40px 0;
+    padding: 15px 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    font-style: italic;
+    text-align: center;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .container {
@@ -31,11 +48,9 @@ h1, h2, h3, h4, h5, h6 {
     padding: 20px;
 }
 
-/* Header Styles */
 header {
+    margin-bottom: 30px;
     text-align: center;
-    margin-bottom: 40px;
-    color: white;
 }
 
 header h1 {
@@ -745,12 +760,13 @@ section h3 {
 }
 
 .tracklist-header {
-    display: flex;
+    display: flex !important;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 15px;
     gap: 15px;
     flex-wrap: wrap;
+    visibility: visible;
 }
 
 .tracklist-header h4 {
@@ -761,11 +777,12 @@ section h3 {
 }
 
 .search-container {
-    display: flex;
+    display: flex !important;
     align-items: center;
     flex: 1;
     min-width: 200px;
     position: relative;
+    visibility: visible;
 }
 
 #tracklistSearch {
@@ -775,6 +792,9 @@ section h3 {
     border-radius: 2px;
     font-family: 'IBM Plex Mono', 'Courier New', monospace;
     font-size: 14px;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 .clear-search-btn {

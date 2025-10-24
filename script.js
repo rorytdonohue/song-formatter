@@ -2268,11 +2268,25 @@ function displayTracklists() {
 
 // Filter tracklists by artist name
 function filterTracklists() {
-    const searchTerm = document.getElementById('tracklistSearch').value.toLowerCase();
+    const searchInput = document.getElementById('tracklistSearch');
+    if (!searchInput) {
+        console.error('Search input not found');
+        return;
+    }
+    
+    const searchTerm = searchInput.value.toLowerCase();
     const artistGroups = document.querySelectorAll('.artist-group');
     
+    console.log('Filtering with term:', searchTerm, 'Found groups:', artistGroups.length);
+    
     artistGroups.forEach(group => {
-        const artistName = group.querySelector('.artist-name').textContent.toLowerCase();
+        const artistNameElement = group.querySelector('.artist-name');
+        if (!artistNameElement) {
+            console.error('Artist name element not found in group');
+            return;
+        }
+        
+        const artistName = artistNameElement.textContent.toLowerCase();
         
         if (artistName.includes(searchTerm)) {
             group.style.display = 'block';
@@ -2476,7 +2490,13 @@ function openTracklistModal() {
     document.getElementById('tracklistModal').style.display = 'block';
     displayTracklists(); // Refresh tracklist display when opening
     // Clear search when opening modal
-    document.getElementById('tracklistSearch').value = '';
+    const searchInput = document.getElementById('tracklistSearch');
+    if (searchInput) {
+        searchInput.value = '';
+        console.log('Search input found and cleared');
+    } else {
+        console.error('Search input not found in modal');
+    }
 }
 
 function closeTracklistModal() {
