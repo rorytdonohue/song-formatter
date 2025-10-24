@@ -309,8 +309,8 @@ async function findExcelMatches() {
     // Run the existing findMatches function but store results separately
     await findMatchesForExcel();
     
-    // Show side-by-side spingrids
-    showSideBySideSpingrids();
+    // Show both results within the Spinitron section
+    showSpinitronWithBothResults();
 }
 
 // Modified findMatches function for Excel data
@@ -526,6 +526,39 @@ function mergeSpingrids() {
     showMergedSpingrid();
 }
 
+// Show both CSV and Excel results within Spinitron section
+function showSpinitronWithBothResults() {
+    const resultsDisplay = document.getElementById('resultsDisplay');
+    resultsDisplay.innerHTML = `
+        <div class="results-header">
+            <h3>Spinitron Results</h3>
+            <div class="format-toggles">
+                <button class="format-btn active" onclick="showSpinitronWithBothResults()" id="spinitronFormatBtn">Spinitron</button>
+                <button class="format-btn" onclick="showMergedSpingrid()" id="mergedFormatBtn">Merged</button>
+            </div>
+        </div>
+        
+        <div class="spinitron-results-container">
+            <div class="spinitron-section">
+                <h4>CSV Data (${csvMatches.length} spins)</h4>
+                <div class="spinitron-content" id="csvSpinitronContent"></div>
+            </div>
+            <div class="spinitron-section">
+                <h4>Excel Data (${excelMatches.length} spins)</h4>
+                <div class="spinitron-content" id="excelSpinitronContent"></div>
+            </div>
+        </div>
+        
+        <div class="merge-controls">
+            <button class="process-btn" onclick="mergeSpingrids()">Merge Both Results</button>
+        </div>
+    `;
+    
+    // Display both spingrids
+    displaySpingridFormat(csvMatches, 'csvSpinitronContent');
+    displaySpingridFormat(excelMatches, 'excelSpinitronContent');
+}
+
 // Show merged spingrid
 function showMergedSpingrid() {
     const resultsDisplay = document.getElementById('resultsDisplay');
@@ -533,7 +566,7 @@ function showMergedSpingrid() {
         <div class="results-header">
             <h3>Merged Spingrid (${matches.length} total spins)</h3>
             <div class="format-toggles">
-                <button class="format-btn" onclick="showSideBySideSpingrids()" id="comparisonFormatBtn">Side by Side</button>
+                <button class="format-btn" onclick="showSpinitronWithBothResults()" id="spinitronFormatBtn">Spinitron</button>
                 <button class="format-btn active" onclick="showMergedSpingrid()" id="mergedFormatBtn">Merged</button>
             </div>
         </div>

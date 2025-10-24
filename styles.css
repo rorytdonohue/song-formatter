@@ -1145,6 +1145,39 @@ section h3 {
     line-height: 1.6;
 }
 
+/* Spinitron results container */
+.spinitron-results-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.spinitron-section {
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    background: white;
+    overflow: hidden;
+}
+
+.spinitron-section h4 {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    margin: 0;
+    padding: 15px;
+    font-size: 1.1rem;
+    text-align: center;
+}
+
+.spinitron-content {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 20px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
 .merge-controls {
     text-align: center;
     margin-top: 20px;
