@@ -663,31 +663,33 @@ function displayCountFormatInContainer(matches, container) {
 
 // Display station format in specific container
 function displayStationFormatInContainer(matches, container) {
-    // Group by artist first, then by song and station
+    // Group by artist first, then by station and song
     const artistGroups = {};
     matches.forEach(match => {
         if (!artistGroups[match.artist]) {
             artistGroups[match.artist] = {};
         }
-        if (!artistGroups[match.artist][match.song]) {
-            artistGroups[match.artist][match.song] = {};
+        if (!artistGroups[match.artist][match.station]) {
+            artistGroups[match.artist][match.station] = {};
         }
-        if (!artistGroups[match.artist][match.song][match.station]) {
-            artistGroups[match.artist][match.song][match.station] = 0;
+        if (!artistGroups[match.artist][match.station][match.song]) {
+            artistGroups[match.artist][match.station][match.song] = 0;
         }
-        artistGroups[match.artist][match.song][match.station]++;
+        artistGroups[match.artist][match.station][match.song]++;
     });
     
     let html = '';
     Object.keys(artistGroups).sort().forEach(artistName => {
         html += `<div class="artist-section"><div class="artist-header">${escapeHtml(artistName)}</div>`;
         
-        const songs = artistGroups[artistName];
-        Object.keys(songs).sort().forEach(songName => {
-            const stations = songs[songName];
-            Object.entries(stations).forEach(([station, count]) => {
-                html += `<div class="station-entry">${escapeHtml(station)} Spun - "${escapeHtml(songName)}" (${count})</div>`;
+        const stations = artistGroups[artistName];
+        Object.keys(stations).sort().forEach(stationName => {
+            const songs = stations[stationName];
+            const songEntries = Object.entries(songs).map(([songName, count]) => {
+                return count > 1 ? `"${escapeHtml(songName)}" (${count})` : `"${escapeHtml(songName)}"`;
             });
+            
+            html += `<div class="station-entry">${escapeHtml(stationName)} Spun - ${songEntries.join(', ')}</div>`;
         });
         
         html += `</div>`;
@@ -1312,19 +1314,19 @@ function displayCountFormat(matches) {
 function displayStationFormat(matches) {
     const stationResultsBody = document.getElementById('stationResultsBody');
     
-    // Group by artist first, then by song and station
+    // Group by artist first, then by station and song
     const artistGroups = {};
     matches.forEach(match => {
         if (!artistGroups[match.artist]) {
             artistGroups[match.artist] = {};
         }
-        if (!artistGroups[match.artist][match.song]) {
-            artistGroups[match.artist][match.song] = {};
+        if (!artistGroups[match.artist][match.station]) {
+            artistGroups[match.artist][match.station] = {};
         }
-        if (!artistGroups[match.artist][match.song][match.station]) {
-            artistGroups[match.artist][match.song][match.station] = 0;
+        if (!artistGroups[match.artist][match.station][match.song]) {
+            artistGroups[match.artist][match.station][match.song] = 0;
         }
-        artistGroups[match.artist][match.song][match.station]++;
+        artistGroups[match.artist][match.station][match.song]++;
     });
     
     let html = '';
@@ -1332,12 +1334,14 @@ function displayStationFormat(matches) {
         html += `<div class="artist-section">`;
         html += `<div class="artist-header">${escapeHtml(artistName)}</div>`;
         
-        const songs = artistGroups[artistName];
-        Object.keys(songs).sort().forEach(songName => {
-            const stations = songs[songName];
-            Object.entries(stations).forEach(([station, count]) => {
-                html += `<div class="station-entry">${escapeHtml(station)} Spun - "${escapeHtml(songName)}" (${count})</div>`;
+        const stations = artistGroups[artistName];
+        Object.keys(stations).sort().forEach(stationName => {
+            const songs = stations[stationName];
+            const songEntries = Object.entries(songs).map(([songName, count]) => {
+                return count > 1 ? `"${escapeHtml(songName)}" (${count})` : `"${escapeHtml(songName)}"`;
             });
+            
+            html += `<div class="station-entry">${escapeHtml(stationName)} Spun - ${songEntries.join(', ')}</div>`;
         });
         
         html += `</div>`;
