@@ -59,6 +59,96 @@ function initializeApp() {
     displayTracklists();
 }
 
+// Handle CSV upload for Spinitron formatter
+function handleCsvUpload() {
+    const fileInput = document.getElementById('csvFile');
+    const file = fileInput.files[0];
+    
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const csvText = e.target.result;
+            const csvData = parseCSV(csvText);
+            
+            if (csvData.length === 0) {
+                alert('CSV file appears to be empty.');
+                return;
+            }
+            
+            // Process the CSV data and show results
+            processCsvData(csvData);
+            
+        } catch (error) {
+            console.error('Error reading CSV:', error);
+            alert('Error reading CSV file. Please make sure it\'s a valid CSV file.');
+        }
+    };
+    
+    reader.readAsText(file);
+}
+
+// Parse CSV text into array of objects
+function parseCSV(csvText) {
+    const lines = csvText.split('\n').filter(line => line.trim());
+    if (lines.length === 0) return [];
+    
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    const data = [];
+    
+    for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+        if (values.length >= headers.length) {
+            const row = {};
+            headers.forEach((header, index) => {
+                row[header] = values[index] || '';
+            });
+            data.push(row);
+        }
+    }
+    
+    return data;
+}
+
+// Process CSV data and display results
+function processCsvData(csvData) {
+    // Convert CSV data to matches format
+    matches = [];
+    
+    csvData.forEach(row => {
+        // Try to extract station, artist, and song from various possible column names
+        const station = row['Station'] || row['station'] || row['Show'] || row['show'] || 'Unknown';
+        const artist = row['Artist'] || row['artist'] || row['Performer'] || row['performer'] || '';
+        const song = row['Song'] || row['song'] || row['Title'] || row['title'] || '';
+        
+        if (artist && song) {
+            matches.push({ station, artist, song });
+        }
+    });
+    
+    if (matches.length === 0) {
+        alert('No valid spin data found in CSV. Please check that your CSV has columns for Station, Artist, and Song.');
+        return;
+    }
+    
+    // Show the results display
+    const resultsDisplay = document.getElementById('resultsDisplay');
+    resultsDisplay.style.display = 'block';
+    
+    // Hide the load section
+    document.getElementById('loadSection').style.display = 'none';
+    
+    // Display results in current format
+    displayResults(matches);
+    
+    // Update summary
+    const summaryEl = document.getElementById('summary');
+    if (summaryEl) {
+        summaryEl.textContent = `${matches.length} spins loaded from CSV file.`;
+    }
+}
+
 // Load file from server
 async function loadStoredFile() {
     try {
@@ -99,7 +189,18 @@ async function loadStoredFile() {
             
         } catch (error) {
         console.error('Error loading file from server:', error);
-        alert('Error loading the Excel file from server. Please make sure an admin has uploaded a file.');
+        
+        // More specific error messages
+        let errorMessage = 'Error loading the Excel file from server. ';
+        if (error.message.includes('404') || error.message.includes('not found')) {
+            errorMessage += 'No file has been uploaded yet. Please ask an admin to upload a file first.';
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+            errorMessage += 'Network error. Please check your connection and try again.';
+        } else {
+            errorMessage += 'Please make sure an admin has uploaded a file and try again.';
+        }
+        
+        alert(errorMessage);
     }
 }
 
@@ -112,6 +213,7 @@ function showProcessingSection() {
 // Supports examples like:
 // - "Artist - Song"
 // - "Song - Artist" (auto-detected using the provided artist set)
+// - "Song - Artist - Album" (3-part format)
 // - "TEXT=song-artist" (anything before '=' ignored; assumes song-artist ordering if artistSet helps)
 // - "Song By: Artist" or "Song by Artist"
 function parseArtistSong(raw, artistSet) {
@@ -123,16 +225,36 @@ function parseArtistSong(raw, artistSet) {
     const eqIdx = str.lastIndexOf('=');
     if (eqIdx !== -1) {
         str = str.slice(eqIdx + 1).trim();
+        
+        // Special handling for TEXT=song-artist format (single dash)
+        if (str.includes('-') && !str.includes(' - ')) {
+            const dashIdx = str.lastIndexOf('-');
+            const song = str.slice(0, dashIdx).trim();
+            let artist = str.slice(dashIdx + 1).trim();
+            
+            // Normalize "Last, First" format to "First Last"
+            const lastFirstMatch = artist.match(/^(.+),\s*(.+)$/);
+            if (lastFirstMatch) {
+                const lastName = lastFirstMatch[1].trim();
+                const firstName = lastFirstMatch[2].trim();
+                artist = `${firstName} ${lastName}`;
+            }
+            
+            // Check if the artist part matches our artist set
+            if (artistSet && artistSet.has(artist.toLowerCase())) {
+                return { artist, song };
+            }
+        }
     }
 
-    // Handle "Song By: Artist" or "Song by Artist"
+    // Handle "Song By: Artist" or "Song by Artist" or "Song by Artist on Program"
     const byMatch = str.match(/^(.+?)\s+by[:\-]?\s+(.+)$/i);
     if (byMatch) {
         const song = byMatch[1].trim();
         let artist = byMatch[2].trim();
         
-        // Strip out common station suffixes like "now on KUTX 98.9 FM"
-        artist = artist.replace(/\s+(now\s+on|playing\s+on)\s+.+$/i, '').trim();
+        // Strip out common station suffixes like "now on KUTX 98.9 FM" or "on Radio Program"
+        artist = artist.replace(/\s+(now\s+on|playing\s+on|on)\s+.+$/i, '').trim();
         
         return { artist, song };
     }
@@ -150,12 +272,63 @@ function parseArtistSong(raw, artistSet) {
                 const leftIsArtist = artistSet && artistSet.has(leftLower);
                 const rightIsArtist = artistSet && artistSet.has(rightLower);
 
+                // Special handling for 3-part format: "Song - Artist - Album"
+                if (parts.length === 3) {
+                    const song = parts[0].trim();
+                    let artist = parts[1].trim();
+                    const album = parts[2].trim();
+                    
+                    // Normalize "Last, First" format to "First Last"
+                    const lastFirstMatch = artist.match(/^(.+),\s*(.+)$/);
+                    if (lastFirstMatch) {
+                        const lastName = lastFirstMatch[1].trim();
+                        const firstName = lastFirstMatch[2].trim();
+                        artist = `${firstName} ${lastName}`;
+                    }
+                    
+                    // Check if the middle part (artist) matches our artist set
+                    if (artistSet && artistSet.has(artist.toLowerCase())) {
+                        return { artist, song };
+                    }
+                    // If not, fall back to normal 2-part logic
+                }
+
                 if (leftIsArtist && !rightIsArtist) {
                     return { artist: left, song: right };
                 }
                 if (!leftIsArtist && rightIsArtist) {
                     return { artist: right, song: left };
                 }
+                
+                // Try normalizing "Last, First" format for both sides
+                let normalizedLeft = left;
+                let normalizedRight = right;
+                
+                const leftLastFirstMatch = left.match(/^(.+),\s*(.+)$/);
+                if (leftLastFirstMatch) {
+                    const lastName = leftLastFirstMatch[1].trim();
+                    const firstName = leftLastFirstMatch[2].trim();
+                    normalizedLeft = `${firstName} ${lastName}`;
+                }
+                
+                const rightLastFirstMatch = right.match(/^(.+),\s*(.+)$/);
+                if (rightLastFirstMatch) {
+                    const lastName = rightLastFirstMatch[1].trim();
+                    const firstName = rightLastFirstMatch[2].trim();
+                    normalizedRight = `${firstName} ${lastName}`;
+                }
+                
+                // Check normalized versions
+                const normalizedLeftIsArtist = artistSet && artistSet.has(normalizedLeft.toLowerCase());
+                const normalizedRightIsArtist = artistSet && artistSet.has(normalizedRight.toLowerCase());
+                
+                if (normalizedLeftIsArtist && !normalizedRightIsArtist) {
+                    return { artist: normalizedLeft, song: right };
+                }
+                if (!normalizedLeftIsArtist && normalizedRightIsArtist) {
+                    return { artist: normalizedRight, song: left };
+                }
+                
                 // Default assumption: left is artist, right is song
                 return { artist: left, song: right };
             }
@@ -192,6 +365,7 @@ async function findMatches() {
     const findBtn = document.getElementById('findBtn');
     downloadBtn.disabled = true;
     findBtn.disabled = true;
+    findBtn.innerHTML = '<span class="loading"></span> Processing...';
     
     const sheetNames = workbookRef.SheetNames;
     for (let s = 0; s < sheetNames.length; s++) {
@@ -244,6 +418,8 @@ async function findMatches() {
     
     downloadBtn.disabled = matches.length === 0;
     findBtn.disabled = false;
+    findBtn.innerHTML = 'Find Matches';
+    findBtn.classList.remove('loading');
     progressEl.textContent = '';
     const summaryEl = document.getElementById('summary');
     summaryEl.textContent = `${matches.length} matches found across ${summary.sheetsScanned} sheets (${summary.rowsScanned} rows scanned).`;
@@ -407,7 +583,7 @@ function displayCountFormat(matches) {
             const stations = songs[songName];
             const totalCount = Object.values(stations).reduce((sum, count) => sum + count, 0);
             const stationList = Object.entries(stations)
-                .map(([station, count]) => `${station} (${count})`)
+                .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
                 .join(', ');
             
             html += `<div class="song-count-entry">`;
@@ -519,7 +695,7 @@ function displaySpingridFormat(matches) {
                     // Song has spins - show count and stations
                     const totalCount = Object.values(songSpins).reduce((sum, count) => sum + count, 0);
                     const stationList = Object.entries(songSpins)
-                        .map(([station, count]) => `${station} (${count})`)
+                        .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
                         .join(', ');
                     
                     html += `<div class="song-count-entry">`;
@@ -531,8 +707,8 @@ function displaySpingridFormat(matches) {
                     // Song has no spins - show empty
                     html += `<div class="song-count-entry">`;
                     html += `<span class="song-name-cell">${escapeHtml(songName)}</span>`;
-                    html += `<span class="count-cell" style="background: #f0f0f0; color: #999;">0</span>`;
-                    html += `<span class="station-cell" style="color: #ccc;">No plays</span>`;
+                    html += `<span class="count-cell"></span>`;
+                    html += `<span class="station-cell"></span>`;
                     html += `</div>`;
                 }
             });
@@ -555,7 +731,7 @@ function displaySpingridFormat(matches) {
             html += `<div class="qc-dropdown" id="qc-${escapeHtml(artistName)}" style="display: none;">`;
             foundTracks.forEach(track => {
                 const stationList = Object.entries(track.stations)
-                    .map(([station, count]) => `${station} (${count})`)
+                    .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
                     .join(', ');
                 html += `<div class="qc-track-entry">`;
                 html += `<span class="qc-track-name">${escapeHtml(track.song)}</span>`;
@@ -629,14 +805,14 @@ function copySpingridForExcel() {
                     // Song has spins - show count and stations
                     const totalCount = Object.values(songSpins).reduce((sum, count) => sum + count, 0);
                     const stationList = Object.entries(songSpins)
-                        .map(([station, count]) => `${station} (${count})`)
+                        .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
                         .join(', ');
                     
                     // Format: Song Name | Spin Count | Station List (horizontal layout)
                     excelData += `${songName}\t${totalCount}\t${stationList}\n`;
                 } else {
                     // Song has no spins - show empty
-                    excelData += `${songName}\t0\tNo plays\n`;
+                    excelData += `${songName}\t\t\n`;
                 }
             });
         } else {
@@ -705,7 +881,7 @@ function copyCountFormatForExcel() {
             const stations = songs[songName];
             const totalCount = Object.values(stations).reduce((sum, count) => sum + count, 0);
             const stationList = Object.entries(stations)
-                .map(([station, count]) => `${station} (${count})`)
+                .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
                 .join(', ');
             
             // Format: Song Name | Spin Count | Station List (horizontal layout)
@@ -742,6 +918,7 @@ function normalizeText(str) {
         .toLowerCase()
         .normalize('NFKD')
         .replace(/[\u0300-\u036f]/g, '') // remove diacritics
+        .replace(/&/g, 'and') // normalize ampersands to 'and'
         .replace(/[^a-z0-9\s]/g, '') // remove punctuation incl. apostrophes
         .replace(/\s+/g, ' ') // collapse whitespace
         .trim();
@@ -854,28 +1031,72 @@ async function adminRefreshStatus() {
 async function adminUpload() {
     const password = document.getElementById('adminPassword').value;
     const file = document.getElementById('adminFile').files[0];
-    if (!password || !file) { alert('Password and file required.'); return; }
-    const form = new FormData();
-    form.append('file', file);
-    const res = await fetch('/api/upload', {
-        method: 'POST',
-        headers: { 'x-admin-password': password },
-        body: form
-    });
-    if (!res.ok) { alert('Upload failed'); return; }
-    await adminRefreshStatus();
-    // File will be auto-loaded by adminRefreshStatus
+    if (!password || !file) { 
+        alert('Password and file required.'); 
+        return; 
+    }
+    
+    try {
+        const form = new FormData();
+        form.append('file', file);
+        const res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'x-admin-password': password },
+            body: form
+        });
+        
+        if (!res.ok) {
+            if (res.status === 401) {
+                alert('Invalid password. Please check your admin password.');
+            } else if (res.status === 413) {
+                alert('File too large. Please choose a smaller file.');
+            } else {
+                alert(`Upload failed with error ${res.status}. Please try again.`);
+            }
+            return;
+        }
+        
+        await adminRefreshStatus();
+        alert('File uploaded successfully!');
+        // File will be auto-loaded by adminRefreshStatus
+    } catch (error) {
+        console.error('Upload error:', error);
+        alert('Network error during upload. Please check your connection and try again.');
+    }
 }
 
 async function adminDelete() {
     const password = document.getElementById('adminPassword').value;
-    if (!password) { alert('Password required.'); return; }
-    const res = await fetch('/api/file', {
-        method: 'DELETE',
-        headers: { 'x-admin-password': password }
-    });
-    if (!res.ok) { alert('Delete failed'); return; }
-    await adminRefreshStatus();
+    if (!password) { 
+        alert('Password required.'); 
+        return; 
+    }
+    
+    if (!confirm('Are you sure you want to delete the current file? This action cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        const res = await fetch('/api/file', {
+            method: 'DELETE',
+            headers: { 'x-admin-password': password }
+        });
+        
+        if (!res.ok) {
+            if (res.status === 401) {
+                alert('Invalid password. Please check your admin password.');
+            } else {
+                alert(`Delete failed with error ${res.status}. Please try again.`);
+            }
+            return;
+        }
+        
+        await adminRefreshStatus();
+        alert('File deleted successfully!');
+    } catch (error) {
+        console.error('Delete error:', error);
+        alert('Network error during delete. Please check your connection and try again.');
+    }
 }
 
 // Tracklist Database Functions
@@ -1098,6 +1319,21 @@ function removeSongFromTracklist(artistName, songName) {
     }
 }
 
+function deleteArtistTracklist(artistName) {
+    if (!tracklistDatabase[artistName]) {
+        alert('No tracklist found for this artist.');
+        return;
+    }
+    
+    const songCount = tracklistDatabase[artistName].length;
+    if (confirm(`Are you sure you want to delete the entire tracklist for "${artistName}"? This will remove ${songCount} songs and cannot be undone.`)) {
+        delete tracklistDatabase[artistName];
+        saveTracklistDatabase();
+        displayTracklists();
+        alert(`Deleted entire tracklist for "${artistName}" (${songCount} songs removed).`);
+    }
+}
+
 function clearTracklist() {
     if (Object.keys(tracklistDatabase).length === 0) {
         alert('Tracklist database is already empty.');
@@ -1127,6 +1363,7 @@ function displayTracklists() {
                 <div class="artist-header">
                     <span class="artist-name">${escapeHtml(artistName)}</span>
                     <span class="artist-count">${songs.length} songs</span>
+                    <button class="delete-artist-btn" onclick="deleteArtistTracklist('${escapeHtml(artistName)}')" title="Delete entire tracklist for this artist">🗑️</button>
                 </div>
                 <div class="songs-list">
         `;

@@ -51,8 +51,7 @@
                 <div class="mapping-controls">
                     <div class="mapping-item">
                         <label for="artistNames">Artist names (comma or newline separated):</label>
-                        <textarea id="artistNames" rows="4" placeholder="e.g. Taylor Swift, Ed Sheeran">KJHK
-CKUA</textarea>
+                        <textarea id="artistNames" rows="4" placeholder="e.g. Taylor Swift, Ed Sheeran"></textarea>
                     </div>
                     <div style="margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap;">
                         <button class="process-btn" id="findBtn" onclick="findMatches()">Find Matches</button>
@@ -121,11 +120,12 @@ CKUA</textarea>
                 </div>
             </section>
 
-            <!-- Load File Section -->
+            <!-- Spinitron Formatter Section -->
             <section class="load-section" id="loadSection">
-                <h3>Load Stored File</h3>
-                <p>Load the Excel file that has been uploaded by an admin.</p>
-                <button class="process-btn" onclick="loadStoredFile()">Load File</button>
+                <h3>Spinitron Formatter</h3>
+                <p>Upload a CSV file with spin data to format and analyze.</p>
+                <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="handleCsvUpload()">
+                <button class="process-btn" onclick="document.getElementById('csvFile').click()">Click to Upload</button>
             </section>
         </main>
 

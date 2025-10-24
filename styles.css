@@ -758,6 +758,22 @@ section h3 {
     align-items: center;
 }
 
+.delete-artist-btn {
+    background: #e53e3e;
+    color: white;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    margin-left: 10px;
+}
+
+.delete-artist-btn:hover {
+    background: #c53030;
+}
+
 .artist-name {
     font-size: 1.1rem;
 }
