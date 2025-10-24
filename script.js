@@ -138,19 +138,27 @@ function processCsvData(csvData) {
         return;
     }
     
-    // Check if we have artist data or need to prompt user
+    // Check if we have artist data or need to auto-detect
     const hasArtistData = matches.some(match => match.artist);
     
     if (!hasArtistData) {
-        // No artist column - prompt user for artist name
-        const artistName = prompt('Your CSV doesn\'t have an Artist column. Please enter the artist name for these songs:');
-        if (!artistName || artistName.trim() === '') {
-            alert('Artist name is required to process the CSV data.');
-            return;
-        }
+        // No artist column - try to auto-detect artist from songs
+        const detectedArtist = detectArtistFromSongs(matches);
         
-        // Add artist name to all matches
-        matches = matches.map(match => ({ ...match, artist: artistName.trim() }));
+        if (detectedArtist) {
+            // Add detected artist name to all matches
+            matches = matches.map(match => ({ ...match, artist: detectedArtist }));
+        } else {
+            // Fallback to manual input if auto-detection fails
+            const artistName = prompt('Could not auto-detect artist from songs. Please enter the artist name for these songs:');
+            if (!artistName || artistName.trim() === '') {
+                alert('Artist name is required to process the CSV data.');
+                return;
+            }
+            
+            // Add artist name to all matches
+            matches = matches.map(match => ({ ...match, artist: artistName.trim() }));
+        }
     }
     
     // Find artists from CSV that match tracklist database
@@ -208,6 +216,53 @@ function setupCsvArtistInput(foundArtists) {
     if (artistNamesTextarea) {
         artistNamesTextarea.value = foundArtists.join('\n');
     }
+}
+
+// Auto-detect artist from CSV songs by matching against tracklist database
+function detectArtistFromSongs(matches) {
+    const csvSongs = matches.map(match => match.song);
+    const tracklistArtists = Object.keys(tracklistDatabase);
+    
+    // Score each artist based on how many of their songs appear in the CSV
+    const artistScores = {};
+    
+    tracklistArtists.forEach(artist => {
+        const artistSongs = tracklistDatabase[artist];
+        let matchCount = 0;
+        
+        artistSongs.forEach(tracklistSong => {
+            // Check if this tracklist song matches any CSV song (fuzzy matching)
+            csvSongs.forEach(csvSong => {
+                const similarity = similarityRatio(tracklistSong, csvSong);
+                if (similarity >= FUZZY_THRESHOLD) {
+                    matchCount++;
+                }
+            });
+        });
+        
+        if (matchCount > 0) {
+            artistScores[artist] = matchCount;
+        }
+    });
+    
+    // Find the artist with the highest score
+    let bestArtist = null;
+    let bestScore = 0;
+    
+    Object.entries(artistScores).forEach(([artist, score]) => {
+        if (score > bestScore) {
+            bestScore = score;
+            bestArtist = artist;
+        }
+    });
+    
+    // Only return if we have a clear winner (at least 2 matches or 50% of songs)
+    const totalSongs = csvSongs.length;
+    if (bestScore >= 2 || (bestScore / totalSongs) >= 0.5) {
+        return bestArtist;
+    }
+    
+    return null;
 }
 
 // Load file from server
