@@ -551,6 +551,18 @@ function showSpinitronWithBothResults() {
             </div>
             <div class="dataset-content" id="excelResultsContent"></div>
         </div>
+        
+        <!-- Merge Section -->
+        <div class="merge-section">
+            <div class="merge-header">
+                <h4>Combined Results</h4>
+                <p>Merge CSV and Excel data together</p>
+            </div>
+            <div class="merge-controls">
+                <button class="process-btn" onclick="showMergedResults()">Merge Both Datasets</button>
+            </div>
+            <div class="merge-content" id="mergedResultsContent" style="display: none;"></div>
+        </div>
     `;
     
     // Show both in table format initially
@@ -761,6 +773,84 @@ function displaySpingridFormatInContainer(matches, container) {
     });
     
     container.innerHTML = html;
+}
+
+// Show merged results from both CSV and Excel data
+function showMergedResults() {
+    const mergedContent = document.getElementById('mergedResultsContent');
+    const mergeButton = document.querySelector('.merge-controls .process-btn');
+    
+    if (mergedContent.style.display === 'none') {
+        // Show merged content
+        mergedContent.style.display = 'block';
+        mergeButton.textContent = 'Hide Merged Results';
+        
+        // Combine both datasets
+        const combinedMatches = [...csvMatches, ...excelMatches];
+        
+        // Display merged results in table format
+        displayMergedResults(combinedMatches);
+    } else {
+        // Hide merged content
+        mergedContent.style.display = 'none';
+        mergeButton.textContent = 'Merge Both Datasets';
+    }
+}
+
+// Display merged results
+function displayMergedResults(combinedMatches) {
+    const mergedContent = document.getElementById('mergedResultsContent');
+    
+    if (combinedMatches.length === 0) {
+        mergedContent.innerHTML = '<p style="text-align: center; color: #718096;">No data to merge.</p>';
+        return;
+    }
+    
+    // Group by artist and song for spin counts
+    const spinCounts = {};
+    combinedMatches.forEach(match => {
+        if (!spinCounts[match.artist]) {
+            spinCounts[match.artist] = {};
+        }
+        if (!spinCounts[match.artist][match.song]) {
+            spinCounts[match.artist][match.song] = {};
+        }
+        if (!spinCounts[match.artist][match.song][match.station]) {
+            spinCounts[match.artist][match.song][match.station] = 0;
+        }
+        spinCounts[match.artist][match.song][match.station]++;
+    });
+    
+    let html = `
+        <div class="merged-results-header">
+            <h5>Combined Data (${combinedMatches.length} total spins)</h5>
+            <div class="merged-format-toggles">
+                <button class="format-btn active" onclick="showMergedFormat('table')" id="mergedTableFormatBtn">Table</button>
+                <button class="format-btn" onclick="showMergedFormat('count')" id="mergedCountFormatBtn">Song Count</button>
+                <button class="format-btn" onclick="showMergedFormat('station')" id="mergedStationFormatBtn">Station Format</button>
+                <button class="format-btn" onclick="showMergedFormat('spingrid')" id="mergedSpingridFormatBtn">Spingrid</button>
+            </div>
+        </div>
+        <div class="merged-results-content" id="mergedResultsDisplay"></div>
+    `;
+    
+    mergedContent.innerHTML = html;
+    
+    // Show in table format initially
+    showMergedFormat('table');
+}
+
+// Show merged data in specified format
+function showMergedFormat(format) {
+    // Update button states
+    document.querySelectorAll('#mergedTableFormatBtn, #mergedCountFormatBtn, #mergedStationFormatBtn, #mergedSpingridFormatBtn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`merged${format.charAt(0).toUpperCase() + format.slice(1)}FormatBtn`).classList.add('active');
+    
+    // Combine both datasets
+    const combinedMatches = [...csvMatches, ...excelMatches];
+    
+    // Display in specified format
+    displayResultsInFormat(combinedMatches, 'mergedResultsDisplay', format);
 }
 
 // Placeholder for merged spingrid (simplified for now)
