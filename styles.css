@@ -1309,6 +1309,43 @@ section h3 {
     border-top: 1px solid #e2e8f0;
 }
 
+/* Fallback Mode Styles */
+.fallback-notice {
+    background: #fef3cd;
+    border: 1px solid #f6d55c;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.fallback-notice p {
+    margin: 0;
+    color: #856404;
+    font-size: 0.95rem;
+}
+
+.fallback-info {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 2rem;
+    text-align: center;
+}
+
+.fallback-info h4 {
+    margin: 0 0 0.5rem 0;
+    color: #2d3748;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.fallback-info p {
+    margin: 0 0 1rem 0;
+    color: #718096;
+    font-size: 0.95rem;
+}
+
 /* Responsive modal adjustments */
 @media (max-width: 768px) {
     .floating-buttons {

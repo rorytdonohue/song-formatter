@@ -167,7 +167,19 @@ function processCsvData(csvData) {
     const foundArtists = findArtistsInCsvData(matches);
     
     if (foundArtists.length === 0) {
-        alert('No artists from the CSV match the tracklist database. Please add artists to the tracklist database first.');
+        // No artists found in tracklist database - offer fallback option
+        const proceedWithoutTracklist = confirm(
+            'No artists from the CSV match the tracklist database.\n\n' +
+            'Would you like to proceed anyway? This will show the raw CSV data without spingrid formatting.\n\n' +
+            'Click OK to continue with basic analysis, or Cancel to add artists to the tracklist database first.'
+        );
+        
+        if (!proceedWithoutTracklist) {
+            return;
+        }
+        
+        // Proceed with fallback mode
+        processCsvDataFallback(matches);
         return;
     }
     
@@ -941,6 +953,73 @@ function copyMergedSpingridForExcel() {
         console.error('Failed to copy: ', err);
         alert('Failed to copy to clipboard. Please try again.');
     });
+}
+
+// Process CSV data in fallback mode (no tracklist database match)
+function processCsvDataFallback(matches) {
+    // Store CSV data separately
+    csvMatches = [...matches];
+    
+    // Show the results display
+    const resultsDisplay = document.getElementById('resultsDisplay');
+    resultsDisplay.style.display = 'block';
+    
+    // Hide the load section
+    document.getElementById('loadSection').style.display = 'none';
+    
+    // Show fallback results with limited formatting options
+    showCsvFallbackResults(matches);
+    
+    // Update summary
+    const summaryEl = document.getElementById('summary');
+    if (summaryEl) {
+        summaryEl.textContent = `${matches.length} spins loaded from CSV file. No matching artists found in tracklist database - showing basic analysis.`;
+    }
+}
+
+// Show CSV results in fallback mode (limited formatting options)
+function showCsvFallbackResults(matches) {
+    const resultsDisplay = document.getElementById('resultsDisplay');
+    resultsDisplay.innerHTML = `
+        <div class="results-header">
+            <h3>CSV Results (Fallback Mode)</h3>
+            <div class="fallback-notice">
+                <p><strong>Note:</strong> No matching artists found in tracklist database. Showing basic analysis only.</p>
+            </div>
+        </div>
+        
+        <!-- CSV Results Section -->
+        <div class="dataset-section">
+            <div class="dataset-header">
+                <h4>CSV Data (${matches.length} spins)</h4>
+                <div class="format-toggles">
+                    <button class="format-btn active" onclick="showCsvFallbackFormat('table')" id="csvFallbackTableFormatBtn">Table</button>
+                    <button class="format-btn" onclick="showCsvFallbackFormat('count')" id="csvFallbackCountFormatBtn">Song Count</button>
+                    <button class="format-btn" onclick="showCsvFallbackFormat('station')" id="csvFallbackStationFormatBtn">Station Format</button>
+                </div>
+            </div>
+            <div class="dataset-content" id="csvFallbackResultsContent"></div>
+        </div>
+        
+        <div class="fallback-info">
+            <h4>To get full spingrid formatting:</h4>
+            <p>Add the artist(s) to your tracklist database first, then re-upload the CSV file.</p>
+            <button class="process-btn" onclick="showTracklistManager()">Manage Tracklist Database</button>
+        </div>
+    `;
+    
+    // Show in table format initially
+    showCsvFallbackFormat('table');
+}
+
+// Show CSV fallback data in specified format
+function showCsvFallbackFormat(format) {
+    // Update button states
+    document.querySelectorAll('#csvFallbackTableFormatBtn, #csvFallbackCountFormatBtn, #csvFallbackStationFormatBtn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`csvFallback${format.charAt(0).toUpperCase() + format.slice(1)}FormatBtn`).classList.add('active');
+    
+    // Display CSV data in specified format
+    displayResultsInFormat(csvMatches, 'csvFallbackResultsContent', format);
 }
 
 // Placeholder for merged spingrid (simplified for now)
