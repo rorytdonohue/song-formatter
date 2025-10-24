@@ -1210,6 +1210,35 @@ section h3 {
     text-align: center;
 }
 
+/* Dataset Sections */
+.dataset-section {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+}
+
+.dataset-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.dataset-header h4 {
+    margin: 0;
+    color: #2d3748;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.dataset-content {
+    margin-top: 1rem;
+}
+
 /* Responsive modal adjustments */
 @media (max-width: 768px) {
     .floating-buttons {

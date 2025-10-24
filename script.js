@@ -516,7 +516,7 @@ function mergeSpingrids() {
     alert('Merge functionality will be added later. For now, you can see both datasets separately.');
 }
 
-// Show both CSV and Excel results within Spinitron section
+// Show both CSV and Excel results with separate formatting options
 function showSpinitronWithBothResults() {
     const resultsDisplay = document.getElementById('resultsDisplay');
     resultsDisplay.innerHTML = `
@@ -524,21 +524,243 @@ function showSpinitronWithBothResults() {
             <h3>Spinitron Results</h3>
         </div>
         
-        <div class="spinitron-results-container">
-            <div class="spinitron-section">
+        <!-- CSV Results Section -->
+        <div class="dataset-section">
+            <div class="dataset-header">
                 <h4>CSV Data (${csvMatches.length} spins)</h4>
-                <div class="spinitron-content" id="csvSpinitronContent"></div>
+                <div class="format-toggles">
+                    <button class="format-btn active" onclick="showCsvFormat('table')" id="csvTableFormatBtn">Table</button>
+                    <button class="format-btn" onclick="showCsvFormat('count')" id="csvCountFormatBtn">Song Count</button>
+                    <button class="format-btn" onclick="showCsvFormat('station')" id="csvStationFormatBtn">Station Format</button>
+                    <button class="format-btn" onclick="showCsvFormat('spingrid')" id="csvSpingridFormatBtn">Spingrid</button>
+                </div>
             </div>
-            <div class="spinitron-section">
+            <div class="dataset-content" id="csvResultsContent"></div>
+        </div>
+        
+        <!-- Excel Results Section -->
+        <div class="dataset-section">
+            <div class="dataset-header">
                 <h4>Excel Data (${excelMatches.length} spins)</h4>
-                <div class="spinitron-content" id="excelSpinitronContent"></div>
+                <div class="format-toggles">
+                    <button class="format-btn active" onclick="showExcelFormat('table')" id="excelTableFormatBtn">Table</button>
+                    <button class="format-btn" onclick="showExcelFormat('count')" id="excelCountFormatBtn">Song Count</button>
+                    <button class="format-btn" onclick="showExcelFormat('station')" id="excelStationFormatBtn">Station Format</button>
+                    <button class="format-btn" onclick="showExcelFormat('spingrid')" id="excelSpingridFormatBtn">Spingrid</button>
+                </div>
             </div>
+            <div class="dataset-content" id="excelResultsContent"></div>
         </div>
     `;
     
-    // Display both spingrids
-    displaySpingridFormat(csvMatches, 'csvSpinitronContent');
-    displaySpingridFormat(excelMatches, 'excelSpinitronContent');
+    // Show both in table format initially
+    showCsvFormat('table');
+    showExcelFormat('table');
+}
+
+// Show CSV data in specified format
+function showCsvFormat(format) {
+    // Update button states
+    document.querySelectorAll('#csvTableFormatBtn, #csvCountFormatBtn, #csvStationFormatBtn, #csvSpingridFormatBtn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`csv${format.charAt(0).toUpperCase() + format.slice(1)}FormatBtn`).classList.add('active');
+    
+    // Display CSV data in specified format
+    displayResultsInFormat(csvMatches, 'csvResultsContent', format);
+}
+
+// Show Excel data in specified format
+function showExcelFormat(format) {
+    // Update button states
+    document.querySelectorAll('#excelTableFormatBtn, #excelCountFormatBtn, #excelStationFormatBtn, #excelSpingridFormatBtn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`excel${format.charAt(0).toUpperCase() + format.slice(1)}FormatBtn`).classList.add('active');
+    
+    // Display Excel data in specified format
+    displayResultsInFormat(excelMatches, 'excelResultsContent', format);
+}
+
+// Display results in specified format for a specific container
+function displayResultsInFormat(matches, containerId, format) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    switch (format) {
+        case 'table':
+            displayTableFormatInContainer(matches, container);
+            break;
+        case 'count':
+            displayCountFormatInContainer(matches, container);
+            break;
+        case 'station':
+            displayStationFormatInContainer(matches, container);
+            break;
+        case 'spingrid':
+            displaySpingridFormatInContainer(matches, container);
+            break;
+    }
+}
+
+// Display table format in specific container
+function displayTableFormatInContainer(matches, container) {
+    let html = '<div class="results-table-container"><table class="results-table"><thead><tr><th>Station</th><th>Artist</th><th>Song</th></tr></thead><tbody>';
+    
+    matches.forEach(match => {
+        html += `<tr><td>${escapeHtml(match.station)}</td><td>${escapeHtml(match.artist)}</td><td>${escapeHtml(match.song)}</td></tr>`;
+    });
+    
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+// Display count format in specific container
+function displayCountFormatInContainer(matches, container) {
+    // Group by artist first, then by song
+    const artistGroups = {};
+    matches.forEach(match => {
+        if (!artistGroups[match.artist]) {
+            artistGroups[match.artist] = {};
+        }
+        if (!artistGroups[match.artist][match.song]) {
+            artistGroups[match.artist][match.song] = {};
+        }
+        if (!artistGroups[match.artist][match.song][match.station]) {
+            artistGroups[match.artist][match.song][match.station] = 0;
+        }
+        artistGroups[match.artist][match.song][match.station]++;
+    });
+    
+    let html = '';
+    Object.keys(artistGroups).sort().forEach(artistName => {
+        html += `<div class="artist-section"><div class="artist-header">${escapeHtml(artistName)}</div>`;
+        
+        const songs = artistGroups[artistName];
+        Object.keys(songs).sort().forEach(songName => {
+            const stations = songs[songName];
+            const totalCount = Object.values(stations).reduce((sum, count) => sum + count, 0);
+            const stationList = Object.entries(stations)
+                .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
+                .join(', ');
+            
+            html += `<div class="song-count-entry"><span class="song-name-cell">${escapeHtml(songName)}</span><span class="count-cell">${totalCount}</span><span class="station-cell">${escapeHtml(stationList)}</span></div>`;
+        });
+        
+        html += `</div>`;
+    });
+    
+    container.innerHTML = html;
+}
+
+// Display station format in specific container
+function displayStationFormatInContainer(matches, container) {
+    // Group by artist first, then by song and station
+    const artistGroups = {};
+    matches.forEach(match => {
+        if (!artistGroups[match.artist]) {
+            artistGroups[match.artist] = {};
+        }
+        if (!artistGroups[match.artist][match.song]) {
+            artistGroups[match.artist][match.song] = {};
+        }
+        if (!artistGroups[match.artist][match.song][match.station]) {
+            artistGroups[match.artist][match.song][match.station] = 0;
+        }
+        artistGroups[match.artist][match.song][match.station]++;
+    });
+    
+    let html = '';
+    Object.keys(artistGroups).sort().forEach(artistName => {
+        html += `<div class="artist-section"><div class="artist-header">${escapeHtml(artistName)}</div>`;
+        
+        const songs = artistGroups[artistName];
+        Object.keys(songs).sort().forEach(songName => {
+            const stations = songs[songName];
+            Object.entries(stations).forEach(([station, count]) => {
+                html += `<div class="station-entry">${escapeHtml(station)} Spun - "${escapeHtml(songName)}" (${count})</div>`;
+            });
+        });
+        
+        html += `</div>`;
+    });
+    
+    container.innerHTML = html;
+}
+
+// Display spingrid format in specific container
+function displaySpingridFormatInContainer(matches, container) {
+    if (matches.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #718096;">No data available.</p>';
+        return;
+    }
+    
+    // Get the artist list from the input
+    const rawArtists = document.getElementById('artistNames').value || '';
+    const artistList = rawArtists
+        .split(/\n|,/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+    
+    if (artistList.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #718096;">No artists entered for search.</p>';
+        return;
+    }
+    
+    // Group matches by artist and song for spin counts
+    const spinCounts = {};
+    matches.forEach(match => {
+        if (!spinCounts[match.artist]) {
+            spinCounts[match.artist] = {};
+        }
+        if (!spinCounts[match.artist][match.song]) {
+            spinCounts[match.artist][match.song] = {};
+        }
+        if (!spinCounts[match.artist][match.song][match.station]) {
+            spinCounts[match.artist][match.song][match.station] = 0;
+        }
+        spinCounts[match.artist][match.song][match.station]++;
+    });
+    
+    let html = '';
+    
+    // Process each artist from the search list (in order)
+    artistList.forEach(artistName => {
+        const artistLower = artistName.toLowerCase();
+        
+        // Find matching artist in tracklist database (case-insensitive)
+        const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
+            artist.toLowerCase() === artistLower
+        );
+        
+        // Create a separate section for each artist
+        html += `<div class="artist-section"><div class="artist-header">${escapeHtml(artistName.toUpperCase())}</div>`;
+        
+        if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
+            // Artist has tracks in database - show all their songs
+            const songs = tracklistDatabase[tracklistArtist];
+            songs.forEach(songName => {
+                // Check if this song has spins
+                const songSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];
+                
+                if (songSpins) {
+                    // Song has spins - show count and stations
+                    const totalCount = Object.values(songSpins).reduce((sum, count) => sum + count, 0);
+                    const stationList = Object.entries(songSpins)
+                        .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
+                        .join(', ');
+                    
+                    html += `<div class="song-count-entry"><span class="song-name-cell">${escapeHtml(songName)}</span><span class="count-cell">${totalCount}</span><span class="station-cell">${escapeHtml(stationList)}</span></div>`;
+                } else {
+                    // Song has no spins - show empty
+                    html += `<div class="song-count-entry"><span class="song-name-cell">${escapeHtml(songName)}</span><span class="count-cell"></span><span class="station-cell"></span></div>`;
+                }
+            });
+        } else {
+            // Artist not in tracklist database - show empty entry
+            html += `<div class="song-count-entry"><span class="song-name-cell">No tracks in database</span><span class="count-cell"></span><span class="station-cell"></span></div>`;
+        }
+        
+        html += `</div>`;
+    });
+    
+    container.innerHTML = html;
 }
 
 // Placeholder for merged spingrid (simplified for now)
