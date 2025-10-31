@@ -1491,3 +1491,95 @@ section h3 {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* Variant Button Styles */
+.variant-btn {
+    background: linear-gradient(135deg, #9f7aea 0%, #805ad5 100%);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 2px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'IBM Plex Mono', 'Courier New', monospace;
+}
+
+.variant-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(159, 122, 234, 0.4);
+}
+
+/* Variant Modal Styles */
+.variant-info {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f7fafc;
+    border-radius: 2px;
+    border-left: 4px solid #9f7aea;
+}
+
+.variant-tracklist-container {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 2px solid #e2e8f0;
+    border-radius: 2px;
+    background: #f7fafc;
+}
+
+.variant-tracklist-list {
+    padding: 10px;
+}
+
+.variant-track-item {
+    background: white;
+    padding: 12px 15px;
+    margin-bottom: 8px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.variant-track-item:hover {
+    background: #edf2f7;
+    border-color: #cbd5e0;
+}
+
+.variant-track-item.selected {
+    background: #f0f4ff;
+    border-color: #9f7aea;
+    box-shadow: 0 2px 8px rgba(159, 122, 234, 0.2);
+}
+
+.variant-track-name {
+    font-weight: 600;
+    color: #2d3748;
+    flex: 1;
+}
+
+.variant-indicator {
+    font-size: 0.85rem;
+    color: #718096;
+    font-style: italic;
+}
+
+.variant-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+/* Variant track styling in spingrid */
+.song-count-entry.parent-track {
+    border-left: 3px solid #9f7aea;
+    background: #faf5ff;
+}
+
+.song-count-entry.variant-track {
+    font-size: 0.9em;
+}

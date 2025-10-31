@@ -2,9 +2,10 @@
 let workbookRef = null; // keep workbook to scan all sheets
 let headersBySheet = {}; // cache headers per sheet
 let matches = []; // { station, artist, song }
-let csvMatches = []; // CSV data matches
-let excelMatches = []; // Excel data matches
+let spinitronMatches = []; // Spinitron data matches
+let onlineradioboxMatches = []; // Online Radio Box data matches
 let tracklistDatabase = {}; // { artistName: [song1, song2, ...] }
+let trackVariants = {}; // { "artist|variantSong": "parentSong" } - maps variant tracks to their parent
 let currentResultFormat = 'table'; // Current display format
 const FUZZY_THRESHOLD = 0.85; // 85% similarity for fuzzy matching
 
@@ -57,11 +58,13 @@ function initializeApp() {
     adminRefreshStatus();
     // Load tracklist database from localStorage
     loadTracklistDatabase();
+    // Load track variants
+    loadTrackVariants();
     // Display current tracklists
     displayTracklists();
 }
 
-// Handle CSV upload for Spinitron formatter
+// Handle Spinitron upload for Spinitron formatter
 function handleCsvUpload() {
     const fileInput = document.getElementById('csvFile');
     const file = fileInput.files[0];
@@ -75,16 +78,16 @@ function handleCsvUpload() {
             const csvData = parseCSV(csvText);
             
             if (csvData.length === 0) {
-                alert('CSV file appears to be empty.');
+                alert('Spinitron file appears to be empty.');
                 return;
             }
             
-            // Process the CSV data and show results
+            // Process the Spinitron data and show results
             processCsvData(csvData);
             
         } catch (error) {
-            console.error('Error reading CSV:', error);
-            alert('Error reading CSV file. Please make sure it\'s a valid CSV file.');
+            console.error('Error reading Spinitron:', error);
+            alert('Error reading Spinitron file. Please make sure it\'s a valid CSV file.');
         }
     };
     
@@ -113,9 +116,9 @@ function parseCSV(csvText) {
     return data;
 }
 
-// Process CSV data and display results
+// Process Spinitron data and display results
 function processCsvData(csvData) {
-    // Convert CSV data to matches format
+    // Convert Spinitron data to matches format
     matches = [];
     
     csvData.forEach(row => {
@@ -136,7 +139,7 @@ function processCsvData(csvData) {
     });
     
     if (matches.length === 0) {
-        alert('No valid spin data found in CSV. Please check that your CSV has columns for Station and Song.');
+        alert('No valid spin data found in Spinitron. Please check that your Spinitron file has columns for Station and Song.');
         return;
     }
     
@@ -154,7 +157,7 @@ function processCsvData(csvData) {
             // Fallback to manual input if auto-detection fails
             const artistName = prompt('Could not auto-detect artist from songs. Please enter the artist name for these songs:');
             if (!artistName || artistName.trim() === '') {
-                        alert('Artist name is required to process the CSV data.');
+                        alert('Artist name is required to process the Spinitron data.');
                 return;
             }
             
@@ -163,14 +166,14 @@ function processCsvData(csvData) {
         }
     }
     
-    // Find artists from CSV that match tracklist database
+    // Find artists from Spinitron that match tracklist database
     const foundArtists = findArtistsInCsvData(matches);
     
     if (foundArtists.length === 0) {
         // No artists found in tracklist database - offer fallback option
         const proceedWithoutTracklist = confirm(
-            'No artists from the CSV match the tracklist database.\n\n' +
-            'Would you like to proceed anyway? This will show the raw CSV data without spingrid formatting.\n\n' +
+            'No artists from the Spinitron data match the tracklist database.\n\n' +
+            'Would you like to proceed anyway? This will show the raw Spinitron data without spingrid formatting.\n\n' +
             'Click OK to continue with basic analysis, or Cancel to add artists to the tracklist database first.'
         );
         
@@ -183,8 +186,8 @@ function processCsvData(csvData) {
         return;
     }
     
-    // Store CSV data separately
-    csvMatches = [...matches];
+    // Store Spinitron data separately
+    spinitronMatches = [...matches];
     
     // Show the results display
     const resultsDisplay = document.getElementById('resultsDisplay');
@@ -196,31 +199,31 @@ function processCsvData(csvData) {
     // Set up the artist names input with found artists
     setupCsvArtistInput(foundArtists);
     
-    // Add Find Matches button for Excel data
+    // Add Find Matches button for Online Radio Box data
     addFindMatchesButton();
     
-    // Display CSV results in current format
+    // Display Spinitron results in current format
     displayResults(matches);
     
     // Update summary
     const summaryEl = document.getElementById('summary');
     if (summaryEl) {
-        summaryEl.textContent = `${matches.length} spins loaded from CSV file. Found ${foundArtists.length} artists: ${foundArtists.join(', ')}. Click "Find Matches" to search Excel file.`;
+        summaryEl.textContent = `${matches.length} spins loaded from Spinitron file. Found ${foundArtists.length} artists: ${foundArtists.join(', ')}. Click "Find Matches" to search Online Radio Box file.`;
     }
 }
 
-// Find artists from CSV data that match tracklist database
+// Find artists from Spinitron data that match tracklist database
 function findArtistsInCsvData(matches) {
     const foundArtists = new Set();
     
     matches.forEach(match => {
-        const csvArtist = match.artist;
+        const spinitronArtist = match.artist;
         
         // Check if this artist matches any in the tracklist database
         const tracklistArtists = Object.keys(tracklistDatabase);
         tracklistArtists.forEach(tracklistArtist => {
-            // Use fuzzy matching to see if CSV artist matches tracklist artist
-            const similarity = similarityRatio(csvArtist, tracklistArtist);
+            // Use fuzzy matching to see if Spinitron artist matches tracklist artist
+            const similarity = similarityRatio(spinitronArtist, tracklistArtist);
             if (similarity >= FUZZY_THRESHOLD) {
                 foundArtists.add(tracklistArtist);
             }
@@ -238,12 +241,12 @@ function setupCsvArtistInput(foundArtists) {
     }
 }
 
-// Auto-detect artist from CSV songs by matching against tracklist database
+// Auto-detect artist from Spinitron songs by matching against tracklist database
 function detectArtistFromSongs(matches) {
-    const csvSongs = matches.map(match => match.song);
+    const spinitronSongs = matches.map(match => match.song);
     const tracklistArtists = Object.keys(tracklistDatabase);
     
-    // Score each artist based on how many of their songs appear in the CSV
+    // Score each artist based on how many of their songs appear in the Spinitron data
     const artistScores = {};
     
     tracklistArtists.forEach(artist => {
@@ -251,9 +254,9 @@ function detectArtistFromSongs(matches) {
         let matchCount = 0;
         
         artistSongs.forEach(tracklistSong => {
-            // Check if this tracklist song matches any CSV song (fuzzy matching)
-            csvSongs.forEach(csvSong => {
-                const similarity = similarityRatio(tracklistSong, csvSong);
+            // Check if this tracklist song matches any Spinitron song (fuzzy matching)
+            spinitronSongs.forEach(spinitronSong => {
+                const similarity = similarityRatio(tracklistSong, spinitronSong);
                 if (similarity >= FUZZY_THRESHOLD) {
                     matchCount++;
                 }
@@ -277,7 +280,7 @@ function detectArtistFromSongs(matches) {
     });
     
     // Only return if we have a clear winner (at least 2 matches or 50% of songs)
-    const totalSongs = csvSongs.length;
+    const totalSongs = spinitronSongs.length;
     if (bestScore >= 2 || (bestScore / totalSongs) >= 0.5) {
         return bestArtist;
     }
@@ -285,7 +288,7 @@ function detectArtistFromSongs(matches) {
     return null;
 }
 
-// Add Find Matches button for Excel data
+// Add Find Matches button for Online Radio Box data
 function addFindMatchesButton() {
     const resultsDisplay = document.getElementById('resultsDisplay');
     if (resultsDisplay) {
@@ -293,39 +296,39 @@ function addFindMatchesButton() {
         findMatchesSection.className = 'find-matches-section';
         findMatchesSection.innerHTML = `
             <div class="find-matches-header">
-                <h4>Find Matches in Excel File</h4>
-                <p>Search the main Excel database for the same artist</p>
+                <h4>Find Matches in Online Radio Box File</h4>
+                <p>Search the main Online Radio Box database for the same artist</p>
             </div>
             <div class="find-matches-controls">
-                <button class="process-btn" onclick="findExcelMatches()">Find Matches in Excel</button>
+                <button class="process-btn" onclick="findExcelMatches()">Find Matches in Online Radio Box</button>
             </div>
         `;
         resultsDisplay.appendChild(findMatchesSection);
     }
 }
 
-// Find matches in Excel file for the same artist
+// Find matches in Online Radio Box file for the same artist
 async function findExcelMatches() {
     if (!workbookRef) {
-        alert('Excel file not loaded. Please load the Excel file first.');
+        alert('Online Radio Box file not loaded. Please load the Online Radio Box file first.');
         return;
     }
     
-    // Get the artist from CSV data
-    const csvArtist = csvMatches.length > 0 ? csvMatches[0].artist : '';
-    if (!csvArtist) {
-        alert('No artist found in CSV data.');
+    // Get the artist from Spinitron data
+    const spinitronArtist = spinitronMatches.length > 0 ? spinitronMatches[0].artist : '';
+    if (!spinitronArtist) {
+        alert('No artist found in Spinitron data.');
         return;
     }
     
-    // Run the Excel search without touching the main artist input
-    await findMatchesForExcel(csvArtist);
+    // Run the Online Radio Box search without touching the main artist input
+    await findMatchesForExcel(spinitronArtist);
     
     // Show both results within the Spinitron section
     showSpinitronWithBothResults();
 }
 
-// Modified findMatches function for Excel data
+// Modified findMatches function for Online Radio Box data
 async function findMatchesForExcel(artistName) {
     if (!workbookRef) {
         alert('Please load a file first.');
@@ -340,10 +343,10 @@ async function findMatchesForExcel(artistName) {
         return;
     }
     
-    excelMatches = [];
+    onlineradioboxMatches = [];
     const summary = { rowsScanned: 0, sheetsScanned: 0 };
     const progressEl = document.getElementById('progress');
-    progressEl.textContent = 'Searching Excel file...';
+    progressEl.textContent = 'Searching Online Radio Box file...';
     
     const sheetNames = workbookRef.SheetNames;
     for (let s = 0; s < sheetNames.length; s++) {
@@ -374,14 +377,14 @@ async function findMatchesForExcel(artistName) {
                     const tlMatch = matchTracklistFuzzy(artist, song);
                     if (tlMatch.ok) {
                         // Canonicalize artist and song to database values so downstream lookups align
-                        excelMatches.push({ station: sheetName, artist: tlMatch.artist, song: tlMatch.song });
+                        onlineradioboxMatches.push({ station: sheetName, artist: tlMatch.artist, song: tlMatch.song });
                     } else {
                         // Artist not in tracklist database - still return the spin
-                        excelMatches.push({ station: sheetName, artist, song });
+                        onlineradioboxMatches.push({ station: sheetName, artist, song });
                     }
                 } else {
                     // No tracklist database - return all results
-                    excelMatches.push({ station: sheetName, artist, song });
+                    onlineradioboxMatches.push({ station: sheetName, artist, song });
                 }
             }
             // Yield occasionally on large rows to keep UI responsive
@@ -408,11 +411,11 @@ function showSideBySideSpingrids() {
         
         <div class="side-by-side-container">
             <div class="spingrid-panel">
-                <h4>CSV Data (${csvMatches.length} spins)</h4>
+                <h4>Spinitron Data (${spinitronMatches.length} spins)</h4>
                 <div class="spingrid-content" id="csvSpingridContent"></div>
             </div>
             <div class="spingrid-panel">
-                <h4>Excel Data (${excelMatches.length} spins)</h4>
+                <h4>Online Radio Box Data (${onlineradioboxMatches.length} spins)</h4>
                 <div class="spingrid-content" id="excelSpingridContent"></div>
             </div>
         </div>
@@ -423,8 +426,8 @@ function showSideBySideSpingrids() {
     `;
     
     // Display both spingrids
-    displaySpingridFormat(csvMatches, 'csvSpingridContent');
-    displaySpingridFormat(excelMatches, 'excelSpingridContent');
+    displaySpingridFormat(spinitronMatches, 'csvSpingridContent');
+    displaySpingridFormat(onlineradioboxMatches, 'excelSpingridContent');
 }
 
 // Display spingrid format for specific container
@@ -528,7 +531,7 @@ function mergeSpingrids() {
     alert('Merge functionality will be added later. For now, you can see both datasets separately.');
 }
 
-// Show both CSV and Excel results with separate formatting options
+// Show both Spinitron and Online Radio Box results with separate formatting options
 function showSpinitronWithBothResults() {
     const resultsDisplay = document.getElementById('resultsDisplay');
     resultsDisplay.innerHTML = `
@@ -536,13 +539,12 @@ function showSpinitronWithBothResults() {
             <h3>Spinitron Results</h3>
         </div>
         
-        <!-- CSV Results Section -->
+        <!-- Spinitron Results Section -->
         <div class="dataset-section">
             <div class="dataset-header">
-                <h4>CSV Data (${csvMatches.length} spins)</h4>
+                <h4>Spinitron Data (${spinitronMatches.length} spins)</h4>
                 <div class="format-toggles">
                     <button class="format-btn active" onclick="showCsvFormat('table')" id="csvTableFormatBtn">Table</button>
-                    <button class="format-btn" onclick="showCsvFormat('count')" id="csvCountFormatBtn">Song Count</button>
                     <button class="format-btn" onclick="showCsvFormat('station')" id="csvStationFormatBtn">Station Format</button>
                     <button class="format-btn" onclick="showCsvFormat('spingrid')" id="csvSpingridFormatBtn">Spingrid</button>
                 </div>
@@ -550,13 +552,12 @@ function showSpinitronWithBothResults() {
             <div class="dataset-content" id="csvResultsContent"></div>
         </div>
         
-        <!-- Excel Results Section -->
+        <!-- Online Radio Box Results Section -->
         <div class="dataset-section">
             <div class="dataset-header">
-                <h4>Excel Data (${excelMatches.length} spins)</h4>
+                <h4>Online Radio Box Data (${onlineradioboxMatches.length} spins)</h4>
                 <div class="format-toggles">
                     <button class="format-btn active" onclick="showExcelFormat('table')" id="excelTableFormatBtn">Table</button>
-                    <button class="format-btn" onclick="showExcelFormat('count')" id="excelCountFormatBtn">Song Count</button>
                     <button class="format-btn" onclick="showExcelFormat('station')" id="excelStationFormatBtn">Station Format</button>
                     <button class="format-btn" onclick="showExcelFormat('spingrid')" id="excelSpingridFormatBtn">Spingrid</button>
                 </div>
@@ -568,7 +569,7 @@ function showSpinitronWithBothResults() {
         <div class="merge-section">
             <div class="merge-header">
                 <h4>Combined Results</h4>
-                <p>Merge CSV and Excel data together</p>
+                <p>Merge Spinitron and Online Radio Box data together</p>
             </div>
             <div class="merge-controls">
                 <button class="process-btn" onclick="showMergedResults()">Merge Both Datasets</button>
@@ -582,24 +583,24 @@ function showSpinitronWithBothResults() {
     showExcelFormat('table');
 }
 
-// Show CSV data in specified format
+// Show Spinitron data in specified format
 function showCsvFormat(format) {
     // Update button states
-    document.querySelectorAll('#csvTableFormatBtn, #csvCountFormatBtn, #csvStationFormatBtn, #csvSpingridFormatBtn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('#csvTableFormatBtn, #csvStationFormatBtn, #csvSpingridFormatBtn').forEach(btn => btn.classList.remove('active'));
     document.getElementById(`csv${format.charAt(0).toUpperCase() + format.slice(1)}FormatBtn`).classList.add('active');
     
-    // Display CSV data in specified format
-    displayResultsInFormat(csvMatches, 'csvResultsContent', format);
+    // Display Spinitron data in specified format
+    displayResultsInFormat(spinitronMatches, 'csvResultsContent', format);
 }
 
-// Show Excel data in specified format
+// Show Online Radio Box data in specified format
 function showExcelFormat(format) {
     // Update button states
-    document.querySelectorAll('#excelTableFormatBtn, #excelCountFormatBtn, #excelStationFormatBtn, #excelSpingridFormatBtn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('#excelTableFormatBtn, #excelStationFormatBtn, #excelSpingridFormatBtn').forEach(btn => btn.classList.remove('active'));
     document.getElementById(`excel${format.charAt(0).toUpperCase() + format.slice(1)}FormatBtn`).classList.add('active');
     
-    // Display Excel data in specified format
-    displayResultsInFormat(excelMatches, 'excelResultsContent', format);
+    // Display Online Radio Box data in specified format
+    displayResultsInFormat(onlineradioboxMatches, 'excelResultsContent', format);
 }
 
 // Display results in specified format for a specific container
@@ -610,9 +611,6 @@ function displayResultsInFormat(matches, containerId, format) {
     switch (format) {
         case 'table':
             displayTableFormatInContainer(matches, container);
-            break;
-        case 'count':
-            displayCountFormatInContainer(matches, container);
             break;
         case 'station':
             displayStationFormatInContainer(matches, container);
@@ -635,43 +633,6 @@ function displayTableFormatInContainer(matches, container) {
     container.innerHTML = html;
 }
 
-// Display count format in specific container
-function displayCountFormatInContainer(matches, container) {
-    // Group by artist first, then by song
-    const artistGroups = {};
-    matches.forEach(match => {
-        if (!artistGroups[match.artist]) {
-            artistGroups[match.artist] = {};
-        }
-        if (!artistGroups[match.artist][match.song]) {
-            artistGroups[match.artist][match.song] = {};
-        }
-        if (!artistGroups[match.artist][match.song][match.station]) {
-            artistGroups[match.artist][match.song][match.station] = 0;
-        }
-        artistGroups[match.artist][match.song][match.station]++;
-    });
-    
-    let html = '';
-    Object.keys(artistGroups).sort().forEach(artistName => {
-        html += `<div class="artist-section"><div class="artist-header">${escapeHtml(artistName)}</div>`;
-        
-        const songs = artistGroups[artistName];
-        Object.keys(songs).sort().forEach(songName => {
-            const stations = songs[songName];
-            const totalCount = Object.values(stations).reduce((sum, count) => sum + count, 0);
-            const stationList = Object.entries(stations)
-                .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
-                .join(', ');
-            
-            html += `<div class="song-count-entry"><span class="song-name-cell">${escapeHtml(songName)}</span><span class="count-cell">${totalCount}</span><span class="station-cell">${escapeHtml(stationList)}</span></div>`;
-        });
-        
-        html += `</div>`;
-    });
-    
-    container.innerHTML = html;
-}
 
 // Display station format in specific container
 function displayStationFormatInContainer(matches, container) {
@@ -761,12 +722,94 @@ function displaySpingridFormatInContainer(matches, container) {
         if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
             // Artist has tracks in database - show all their songs
             const songs = tracklistDatabase[tracklistArtist];
+            
+            // Group variants under their parent tracks (same logic as main displaySpingridFormat)
+            const parentGroups = {};
+            const standaloneSongs = [];
+            
             songs.forEach(songName => {
-                // Check if this song has spins
+                const variantKey = `${tracklistArtist}|${songName}`;
+                const isVariant = trackVariants[variantKey];
+                
+                if (isVariant) {
+                    return;
+                }
+                
+                // Check if this song is a parent (has variants pointing to it for this artist)
+                const hasVariants = Object.entries(trackVariants).some(([key, parent]) => {
+                    const [variantArtist] = key.split('|');
+                    return variantArtist === tracklistArtist && parent === songName;
+                });
+                
+                if (hasVariants) {
+                    if (!parentGroups[songName]) {
+                        parentGroups[songName] = {
+                            variants: [],
+                            spins: {}
+                        };
+                    }
+                    
+                    Object.entries(trackVariants).forEach(([key, parent]) => {
+                        const [variantArtist] = key.split('|');
+                        if (variantArtist === tracklistArtist && parent === songName) {
+                            const [, variantSong] = key.split('|');
+                            if (variantSong) {
+                                parentGroups[songName].variants.push(variantSong);
+                                const variantSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][variantSong];
+                                if (variantSpins) {
+                                    Object.entries(variantSpins).forEach(([station, count]) => {
+                                        if (!parentGroups[songName].spins[station]) {
+                                            parentGroups[songName].spins[station] = 0;
+                                        }
+                                        parentGroups[songName].spins[station] += count;
+                                    });
+                                }
+                            }
+                        }
+                    });
+                    
+                    const parentSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];
+                    if (parentSpins) {
+                        Object.entries(parentSpins).forEach(([station, count]) => {
+                            if (!parentGroups[songName].spins[station]) {
+                                parentGroups[songName].spins[station] = 0;
+                            }
+                            parentGroups[songName].spins[station] += count;
+                        });
+                    }
+                } else {
+                    standaloneSongs.push(songName);
+                }
+            });
+            
+            // Display parent tracks with variants
+            Object.keys(parentGroups).forEach(parentSong => {
+                const group = parentGroups[parentSong];
+                const totalCount = Object.values(group.spins).reduce((sum, count) => sum + count, 0);
+                const stationList = Object.entries(group.spins)
+                    .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
+                    .join(', ');
+                
+                html += `<div class="song-count-entry parent-track"><span class="song-name-cell">${escapeHtml(parentSong)}</span><span class="count-cell">${totalCount > 0 ? totalCount : ''}</span><span class="station-cell">${totalCount > 0 ? escapeHtml(stationList) : ''}</span></div>`;
+                
+                if (group.variants.length > 0) {
+                    group.variants.forEach(variantSong => {
+                        const variantSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][variantSong];
+                        const variantCount = variantSpins ? Object.values(variantSpins).reduce((sum, count) => sum + count, 0) : 0;
+                        const variantStationList = variantSpins ? Object.entries(variantSpins)
+                            .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
+                            .join(', ') : '';
+                        
+                        html += `<div class="song-count-entry variant-track"><span class="song-name-cell" style="padding-left: 20px; color: #718096;">→ ${escapeHtml(variantSong)}</span><span class="count-cell">${variantCount > 0 ? variantCount : ''}</span><span class="station-cell">${variantCount > 0 ? escapeHtml(variantStationList) : ''}</span></div>`;
+                    });
+                }
+            });
+            
+            // Display standalone songs
+            standaloneSongs.forEach(songName => {
                 const songSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];
                 
                 if (songSpins) {
-                    // Song has spins - show count and stations
                     const totalCount = Object.values(songSpins).reduce((sum, count) => sum + count, 0);
                     const stationList = Object.entries(songSpins)
                         .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
@@ -774,7 +817,6 @@ function displaySpingridFormatInContainer(matches, container) {
                     
                     html += `<div class="song-count-entry"><span class="song-name-cell">${escapeHtml(songName)}</span><span class="count-cell">${totalCount}</span><span class="station-cell">${escapeHtml(stationList)}</span></div>`;
                 } else {
-                    // Song has no spins - show empty
                     html += `<div class="song-count-entry"><span class="song-name-cell">${escapeHtml(songName)}</span><span class="count-cell"></span><span class="station-cell"></span></div>`;
                 }
             });
@@ -789,7 +831,7 @@ function displaySpingridFormatInContainer(matches, container) {
     container.innerHTML = html;
 }
 
-// Show merged results from both CSV and Excel data
+// Show merged results from both Spinitron and Online Radio Box data
 function showMergedResults() {
     const mergedContent = document.getElementById('mergedResultsContent');
     const mergeButton = document.querySelector('.merge-controls .process-btn');
@@ -800,7 +842,7 @@ function showMergedResults() {
         mergeButton.textContent = 'Hide Merged Results';
         
         // Combine both datasets
-        const combinedMatches = [...csvMatches, ...excelMatches];
+        const combinedMatches = [...spinitronMatches, ...onlineradioboxMatches];
         
         // Display merged results in table format
         displayMergedResults(combinedMatches);
@@ -840,7 +882,6 @@ function displayMergedResults(combinedMatches) {
             <h5>Combined Data (${combinedMatches.length} total spins)</h5>
             <div class="merged-format-toggles">
                 <button class="format-btn active" onclick="showMergedFormat('table')" id="mergedTableFormatBtn">Table</button>
-                <button class="format-btn" onclick="showMergedFormat('count')" id="mergedCountFormatBtn">Song Count</button>
                 <button class="format-btn" onclick="showMergedFormat('station')" id="mergedStationFormatBtn">Station Format</button>
                 <button class="format-btn" onclick="showMergedFormat('spingrid')" id="mergedSpingridFormatBtn">Spingrid</button>
             </div>
@@ -860,7 +901,7 @@ function displayMergedResults(combinedMatches) {
 // Show merged data in specified format
 function showMergedFormat(format) {
     // Update button states
-    document.querySelectorAll('#mergedTableFormatBtn, #mergedCountFormatBtn, #mergedStationFormatBtn, #mergedSpingridFormatBtn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('#mergedTableFormatBtn, #mergedStationFormatBtn, #mergedSpingridFormatBtn').forEach(btn => btn.classList.remove('active'));
     document.getElementById(`merged${format.charAt(0).toUpperCase() + format.slice(1)}FormatBtn`).classList.add('active');
     
     // Show/hide Excel controls based on format
@@ -870,15 +911,15 @@ function showMergedFormat(format) {
     }
     
     // Combine both datasets
-    const combinedMatches = [...csvMatches, ...excelMatches];
+    const combinedMatches = [...spinitronMatches, ...onlineradioboxMatches];
     
     // Display in specified format
     displayResultsInFormat(combinedMatches, 'mergedResultsDisplay', format);
 }
 
-// Copy merged spingrid for Excel
+// Copy merged spingrid for Excel (preserving function name for compatibility)
 function copyMergedSpingridForExcel() {
-    const combinedMatches = [...csvMatches, ...excelMatches];
+    const combinedMatches = [...spinitronMatches, ...onlineradioboxMatches];
     
     if (combinedMatches.length === 0) {
         alert('no data to copy.');
@@ -955,10 +996,10 @@ function copyMergedSpingridForExcel() {
     });
 }
 
-// Process CSV data in fallback mode (no tracklist database match)
+// Process Spinitron data in fallback mode (no tracklist database match)
 function processCsvDataFallback(matches) {
-    // Store CSV data separately
-    csvMatches = [...matches];
+    // Store Spinitron data separately
+    spinitronMatches = [...matches];
     
     // Show the results display
     const resultsDisplay = document.getElementById('resultsDisplay');
@@ -973,28 +1014,27 @@ function processCsvDataFallback(matches) {
     // Update summary
     const summaryEl = document.getElementById('summary');
     if (summaryEl) {
-        summaryEl.textContent = `${matches.length} spins loaded from CSV file. No matching artists found in tracklist database - showing basic analysis.`;
+        summaryEl.textContent = `${matches.length} spins loaded from Spinitron file. No matching artists found in tracklist database - showing basic analysis.`;
     }
 }
 
-// Show CSV results in fallback mode (limited formatting options)
+// Show Spinitron results in fallback mode (limited formatting options)
 function showCsvFallbackResults(matches) {
     const resultsDisplay = document.getElementById('resultsDisplay');
     resultsDisplay.innerHTML = `
         <div class="results-header">
-            <h3>CSV Results (Fallback Mode)</h3>
+            <h3>Spinitron Results (Fallback Mode)</h3>
             <div class="fallback-notice">
                 <p><strong>Note:</strong> No matching artists found in tracklist database. Showing basic analysis only.</p>
             </div>
         </div>
         
-        <!-- CSV Results Section -->
+        <!-- Spinitron Results Section -->
         <div class="dataset-section">
             <div class="dataset-header">
-                <h4>CSV Data (${matches.length} spins)</h4>
+                <h4>Spinitron Data (${matches.length} spins)</h4>
                 <div class="format-toggles">
                     <button class="format-btn active" onclick="showCsvFallbackFormat('table')" id="csvFallbackTableFormatBtn">Table</button>
-                    <button class="format-btn" onclick="showCsvFallbackFormat('count')" id="csvFallbackCountFormatBtn">Song Count</button>
                     <button class="format-btn" onclick="showCsvFallbackFormat('station')" id="csvFallbackStationFormatBtn">Station Format</button>
                 </div>
             </div>
@@ -1003,7 +1043,7 @@ function showCsvFallbackResults(matches) {
         
         <div class="fallback-info">
             <h4>To get full spingrid formatting:</h4>
-            <p>Add the artist(s) to your tracklist database first, then re-upload the CSV file.</p>
+            <p>Add the artist(s) to your tracklist database first, then re-upload the Spinitron file.</p>
             <button class="process-btn" onclick="showTracklistManager()">Manage Tracklist Database</button>
         </div>
     `;
@@ -1012,14 +1052,14 @@ function showCsvFallbackResults(matches) {
     showCsvFallbackFormat('table');
 }
 
-// Show CSV fallback data in specified format
+// Show Spinitron fallback data in specified format
 function showCsvFallbackFormat(format) {
     // Update button states
-    document.querySelectorAll('#csvFallbackTableFormatBtn, #csvFallbackCountFormatBtn, #csvFallbackStationFormatBtn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('#csvFallbackTableFormatBtn, #csvFallbackStationFormatBtn').forEach(btn => btn.classList.remove('active'));
     document.getElementById(`csvFallback${format.charAt(0).toUpperCase() + format.slice(1)}FormatBtn`).classList.add('active');
     
-    // Display CSV data in specified format
-    displayResultsInFormat(csvMatches, 'csvFallbackResultsContent', format);
+    // Display Spinitron data in specified format
+    displayResultsInFormat(spinitronMatches, 'csvFallbackResultsContent', format);
 }
 
 // Placeholder for merged spingrid (simplified for now)
@@ -1058,7 +1098,7 @@ async function loadStoredFile() {
                 }
             }
             if (!firstHeaders) {
-                alert('The Excel file appears to be empty.');
+                alert('The Online Radio Box file appears to be empty.');
                 return;
             }
             
@@ -1069,7 +1109,7 @@ async function loadStoredFile() {
         console.error('Error loading file from server:', error);
         
         // More specific error messages
-        let errorMessage = 'Error loading the Excel file from server. ';
+        let errorMessage = 'Error loading the Online Radio Box file from server. ';
         if (error.message.includes('404') || error.message.includes('not found')) {
             errorMessage += 'No file has been uploaded yet. Please ask an admin to upload a file first.';
         } else if (error.message.includes('network') || error.message.includes('fetch')) {
@@ -1217,7 +1257,7 @@ function parseArtistSong(raw, artistSet) {
     return { artist: '', song: '' };
 }
 
-// Find matches across all sheets and enable CSV download
+// Find matches across all sheets and enable download
 async function findMatches() {
     if (!workbookRef) {
         alert('Please load a file first.');
@@ -1401,9 +1441,6 @@ function displayResults(matches) {
         case 'table':
             displayTableFormat(matches);
             break;
-        case 'count':
-            displayCountFormat(matches);
-            break;
         case 'station':
             displayStationFormat(matches);
             break;
@@ -1421,61 +1458,26 @@ function displayTableFormat(matches) {
     resultsTableBody.innerHTML = '';
     
     // Add rows for each match
-    matches.forEach(match => {
+    matches.forEach((match, index) => {
         const row = document.createElement('tr');
+        const variantKey = `${match.artist}|${match.song}`;
+        const isVariant = trackVariants[variantKey];
+        const variantIndicator = isVariant ? ` <span style="color: #718096; font-size: 0.85em;">(variant of ${escapeHtml(isVariant)})</span>` : '';
+        
         row.innerHTML = `
             <td>${escapeHtml(match.station)}</td>
             <td>${escapeHtml(match.artist)}</td>
-            <td>${escapeHtml(match.song)}</td>
+            <td>${escapeHtml(match.song)}${variantIndicator}</td>
+            <td>
+                <button class="variant-btn" onclick="openVariantModal('${escapeHtml(match.artist)}', '${escapeHtml(match.song)}')" title="Make this track a variant of another track">
+                    make variant
+                </button>
+            </td>
         `;
         resultsTableBody.appendChild(row);
     });
 }
 
-// Display results in count format (Song, Count, Station)
-function displayCountFormat(matches) {
-    const countResultsBody = document.getElementById('countResultsBody');
-    
-    // Group by artist first, then by song
-    const artistGroups = {};
-    matches.forEach(match => {
-        if (!artistGroups[match.artist]) {
-            artistGroups[match.artist] = {};
-        }
-        if (!artistGroups[match.artist][match.song]) {
-            artistGroups[match.artist][match.song] = {};
-        }
-        if (!artistGroups[match.artist][match.song][match.station]) {
-            artistGroups[match.artist][match.song][match.station] = 0;
-        }
-        artistGroups[match.artist][match.song][match.station]++;
-    });
-    
-    let html = '';
-    Object.keys(artistGroups).sort().forEach(artistName => {
-        html += `<div class="artist-section">`;
-        html += `<div class="artist-header">${escapeHtml(artistName)}</div>`;
-        
-        const songs = artistGroups[artistName];
-        Object.keys(songs).sort().forEach(songName => {
-            const stations = songs[songName];
-            const totalCount = Object.values(stations).reduce((sum, count) => sum + count, 0);
-            const stationList = Object.entries(stations)
-                .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
-                .join(', ');
-            
-            html += `<div class="song-count-entry">`;
-            html += `<span class="song-name-cell">${escapeHtml(songName)}</span>`;
-            html += `<span class="count-cell">${totalCount}</span>`;
-            html += `<span class="station-cell">${escapeHtml(stationList)}</span>`;
-            html += `</div>`;
-        });
-        
-        html += `</div>`;
-    });
-    
-    countResultsBody.innerHTML = html;
-}
 
 // Display results in station format (Station Spun - "Song")
 function displayStationFormat(matches) {
@@ -1566,9 +1568,109 @@ function displaySpingridFormat(matches) {
         if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
             // Artist has tracks in database - show all their songs
             const songs = tracklistDatabase[tracklistArtist];
-            // songs are stored in insertion order; do not sort
+            
+            // Group variants under their parent tracks
+            const parentGroups = {}; // { parentSong: { variants: [...], spins: {...} } }
+            const standaloneSongs = []; // Songs that are not variants and have no variants
+            
             songs.forEach(songName => {
-                // Check if this song has spins
+                // Check if this song is itself a variant
+                const variantKey = `${tracklistArtist}|${songName}`;
+                const isVariant = trackVariants[variantKey];
+                
+                if (isVariant) {
+                    // This is a variant - skip it here, will be shown under parent
+                    return;
+                }
+                
+                // Check if this song is a parent (has variants pointing to it for this artist)
+                const hasVariants = Object.entries(trackVariants).some(([key, parent]) => {
+                    const [variantArtist] = key.split('|');
+                    return variantArtist === tracklistArtist && parent === songName;
+                });
+                
+                if (hasVariants) {
+                    // This is a parent track - group variants under it
+                    if (!parentGroups[songName]) {
+                        parentGroups[songName] = {
+                            variants: [],
+                            spins: {}
+                        };
+                    }
+                    
+                    // Find all variants of this song (for this artist)
+                    Object.entries(trackVariants).forEach(([key, parent]) => {
+                        const [variantArtist] = key.split('|');
+                        if (variantArtist === tracklistArtist && parent === songName) {
+                            const [, variantSong] = key.split('|');
+                            if (variantSong) {
+                                parentGroups[songName].variants.push(variantSong);
+                                
+                                // Aggregate spins from variant tracks
+                                const variantSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][variantSong];
+                                if (variantSpins) {
+                                    Object.entries(variantSpins).forEach(([station, count]) => {
+                                        if (!parentGroups[songName].spins[station]) {
+                                            parentGroups[songName].spins[station] = 0;
+                                        }
+                                        parentGroups[songName].spins[station] += count;
+                                    });
+                                }
+                            }
+                        }
+                    });
+                    
+                    // Also add spins from the parent track itself
+                    const parentSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];
+                    if (parentSpins) {
+                        Object.entries(parentSpins).forEach(([station, count]) => {
+                            if (!parentGroups[songName].spins[station]) {
+                                parentGroups[songName].spins[station] = 0;
+                            }
+                            parentGroups[songName].spins[station] += count;
+                        });
+                    }
+                } else {
+                    // Standalone song (not a variant and has no variants)
+                    standaloneSongs.push(songName);
+                }
+            });
+            
+            // Display parent tracks with their variants grouped
+            Object.keys(parentGroups).forEach(parentSong => {
+                const group = parentGroups[parentSong];
+                const totalCount = Object.values(group.spins).reduce((sum, count) => sum + count, 0);
+                const stationList = Object.entries(group.spins)
+                    .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
+                    .join(', ');
+                
+                // Show parent track
+                html += `<div class="song-count-entry parent-track">`;
+                html += `<span class="song-name-cell">${escapeHtml(parentSong)}</span>`;
+                html += `<span class="count-cell">${totalCount > 0 ? totalCount : ''}</span>`;
+                html += `<span class="station-cell">${totalCount > 0 ? escapeHtml(stationList) : ''}</span>`;
+                html += `</div>`;
+                
+                // Show variants indented under parent
+                if (group.variants.length > 0) {
+                    group.variants.forEach(variantSong => {
+                        const variantSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][variantSong];
+                        const variantCount = variantSpins ? Object.values(variantSpins).reduce((sum, count) => sum + count, 0) : 0;
+                        const variantStationList = variantSpins ? Object.entries(variantSpins)
+                            .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
+                            .join(', ') : '';
+                        
+                        html += `<div class="song-count-entry variant-track">`;
+                        html += `<span class="song-name-cell" style="padding-left: 20px; color: #718096;">→ ${escapeHtml(variantSong)}</span>`;
+                        html += `<span class="count-cell">${variantCount > 0 ? variantCount : ''}</span>`;
+                        html += `<span class="station-cell">${variantCount > 0 ? escapeHtml(variantStationList) : ''}</span>`;
+                        html += `</div>`;
+                    });
+                }
+            });
+            
+            // Display standalone songs (not variants, have no variants)
+            standaloneSongs.forEach(songName => {
                 const songSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];
                 
                 if (songSpins) {
@@ -1606,7 +1708,7 @@ function displaySpingridFormat(matches) {
         if (foundTracks.length > 0) {
             html += `<div class="qc-section">`;
             html += `<button class="qc-toggle-btn" onclick="toggleQCDropdown('${escapeHtml(artistName)}')">`;
-            html += `🔍 QC: ${foundTracks.length} tracks found in Excel but not in tracklist (${foundTracks.reduce((sum, t) => sum + t.count, 0)} total spins)`;
+            html += `🔍 QC: ${foundTracks.length} tracks found in Online Radio Box but not in tracklist (${foundTracks.reduce((sum, t) => sum + t.count, 0)} total spins)`;
             html += `</button>`;
             html += `<div class="qc-dropdown" id="qc-${escapeHtml(artistName)}" style="display: none;">`;
             foundTracks.forEach(track => {
@@ -1730,53 +1832,6 @@ function setResultFormat(format) {
     }
 }
 
-// Copy count format data for Excel (tab-separated)
-function copyCountFormatForExcel() {
-    if (matches.length === 0) {
-        alert('No results to copy.');
-        return;
-    }
-    
-    // Group by artist first, then by song
-    const artistGroups = {};
-    matches.forEach(match => {
-        if (!artistGroups[match.artist]) {
-            artistGroups[match.artist] = {};
-        }
-        if (!artistGroups[match.artist][match.song]) {
-            artistGroups[match.artist][match.song] = {};
-        }
-        if (!artistGroups[match.artist][match.song][match.station]) {
-            artistGroups[match.artist][match.song][match.station] = 0;
-        }
-        artistGroups[match.artist][match.song][match.station]++;
-    });
-    
-    let excelData = '';
-    Object.keys(artistGroups).sort().forEach(artistName => {
-        excelData += `\n${artistName}\n`;
-        
-        const songs = artistGroups[artistName];
-        Object.keys(songs).sort().forEach(songName => {
-            const stations = songs[songName];
-            const totalCount = Object.values(stations).reduce((sum, count) => sum + count, 0);
-            const stationList = Object.entries(stations)
-                .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
-                .join(', ');
-            
-            // Format: Song Name | Spin Count | Station List (horizontal layout)
-            excelData += `${songName}\t${totalCount}\t${stationList}\n`;
-        });
-    });
-    
-    // Copy to clipboard
-    navigator.clipboard.writeText(excelData).then(() => {
-        alert('Data copied to clipboard! Paste into Excel and it will format correctly across columns.');
-    }).catch(err => {
-        console.error('Failed to copy: ', err);
-        alert('failed to copy to clipboard. please try again.');
-    });
-}
 
 // Escape HTML to prevent XSS
 function escapeHtml(text) {
@@ -2403,7 +2458,7 @@ function matchTracklistFuzzy(artistName, songName) {
     return { ok: false };
 }
 
-// Get tracks found in Excel but not in tracklist for QC
+// Get tracks found in Online Radio Box but not in tracklist for QC
 function getFoundTracksNotInTracklist(artistName, matches, tracklistArtist) {
     const artistMatches = matches.filter(m => m.artist.toLowerCase() === artistName.toLowerCase());
     const foundTracks = {};
@@ -2499,6 +2554,9 @@ window.onclick = function(event) {
     if (event.target === tracklistModal) {
         closeTracklistModal();
     }
+    if (event.target === document.getElementById('variantModal')) {
+        closeVariantModal();
+    }
 }
 
 // Close modals with Escape key
@@ -2506,5 +2564,212 @@ document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape') {
         closeAdminModal();
         closeTracklistModal();
+        closeVariantModal();
     }
 });
+
+// Track Variant Functions
+let currentVariantArtist = '';
+let currentVariantSong = '';
+let selectedParentSong = null;
+
+async function loadTrackVariants() {
+    try {
+        // Try Supabase first if available
+        if (supabaseClient) {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('track_variants')
+                    .select('*');
+                if (!error && data) {
+                    trackVariants = {};
+                    data.forEach(row => {
+                        const key = `${row.artist_name}|${row.variant_song}`;
+                        trackVariants[key] = row.parent_song;
+                    });
+                    console.log('Track variants loaded from Supabase');
+                    // Backup to localStorage
+                    localStorage.setItem('trackVariants', JSON.stringify(trackVariants));
+                    return;
+                }
+            } catch (supabaseError) {
+                console.warn('Supabase fetch failed, trying localStorage:', supabaseError);
+            }
+        }
+        
+        // Fallback to localStorage
+        const stored = localStorage.getItem('trackVariants');
+        if (stored) {
+            trackVariants = JSON.parse(stored);
+            console.log('Track variants loaded from localStorage');
+        }
+    } catch (e) {
+        console.error('Error loading track variants:', e);
+        trackVariants = {};
+    }
+}
+
+async function saveTrackVariants() {
+    try {
+        // Always save to localStorage as backup
+        localStorage.setItem('trackVariants', JSON.stringify(trackVariants));
+        
+        // Try Supabase direct client first if available
+        if (supabaseClient) {
+            try {
+                // Convert to rows for Supabase
+                const rows = [];
+                for (const [key, parentSong] of Object.entries(trackVariants)) {
+                    const [artistName, variantSong] = key.split('|');
+                    rows.push({
+                        artist_name: artistName,
+                        variant_song: variantSong,
+                        parent_song: parentSong
+                    });
+                }
+                
+                if (rows.length > 0) {
+                    // Delete all existing and insert new ones
+                    const { error: deleteError } = await supabaseClient
+                        .from('track_variants')
+                        .delete()
+                        .neq('id', '00000000-0000-0000-0000-000000000000');
+                    
+                    if (deleteError) {
+                        console.warn('Supabase delete warning:', deleteError);
+                    }
+                    
+                    const { error: insertError } = await supabaseClient
+                        .from('track_variants')
+                        .insert(rows);
+                    
+                    if (!insertError) {
+                        console.log('Track variants saved to Supabase');
+                        return;
+                    } else {
+                        console.warn('Supabase insert failed:', insertError);
+                    }
+                }
+            } catch (supabaseError) {
+                console.warn('Supabase save failed:', supabaseError);
+            }
+        }
+    } catch (e) {
+        console.error('Error saving track variants:', e);
+    }
+}
+
+function openVariantModal(artist, song) {
+    currentVariantArtist = artist;
+    currentVariantSong = song;
+    
+    // Check if already a variant
+    const variantKey = `${artist}|${song}`;
+    selectedParentSong = trackVariants[variantKey] || null;
+    
+    // Update info text
+    document.getElementById('variantTrackInfo').textContent = `${artist} - ${song}`;
+    
+    // Display tracklist for this artist
+    displayVariantTracklist(artist);
+    
+    // Show modal
+    document.getElementById('variantModal').style.display = 'block';
+}
+
+function closeVariantModal() {
+    document.getElementById('variantModal').style.display = 'none';
+    currentVariantArtist = '';
+    currentVariantSong = '';
+    selectedParentSong = null;
+}
+
+function displayVariantTracklist(artistName) {
+    const container = document.getElementById('variantTracklistContainer');
+    
+    // Find matching artist in tracklist database (case-insensitive)
+    const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
+        artist.toLowerCase() === artistName.toLowerCase()
+    );
+    
+    if (!tracklistArtist || !tracklistDatabase[tracklistArtist] || tracklistDatabase[tracklistArtist].length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #718096; padding: 20px;">No tracks found for this artist in the tracklist database. Please add tracks first.</p>';
+        return;
+    }
+    
+    const songs = tracklistDatabase[tracklistArtist];
+    let html = '<div class="variant-tracklist-list">';
+    
+    songs.forEach(songName => {
+        const isSelected = selectedParentSong === songName;
+        const variantKey = `${tracklistArtist}|${songName}`;
+        const hasVariants = Object.entries(trackVariants).some(([key, parent]) => 
+            parent === songName && key !== variantKey
+        );
+        
+        html += `<div class="variant-track-item ${isSelected ? 'selected' : ''}" onclick="selectParentTrack('${escapeHtml(tracklistArtist)}', '${escapeHtml(songName)}')">`;
+        html += `<div class="variant-track-name">${escapeHtml(songName)}</div>`;
+        if (hasVariants) {
+            const variantCount = Object.values(trackVariants).filter(p => p === songName).length;
+            html += `<div class="variant-indicator">${variantCount} variant(s)</div>`;
+        }
+        html += `</div>`;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function selectParentTrack(artist, song) {
+    selectedParentSong = song;
+    displayVariantTracklist(artist);
+}
+
+function clearVariant() {
+    selectedParentSong = null;
+    displayVariantTracklist(currentVariantArtist);
+}
+
+function saveVariant() {
+    const variantKey = `${currentVariantArtist}|${currentVariantSong}`;
+    
+    if (!selectedParentSong) {
+        // Clear variant relationship
+        delete trackVariants[variantKey];
+        saveTrackVariants();
+        
+        // Refresh displays
+        displayTableFormat(matches);
+        if (currentResultFormat === 'spingrid') {
+            displayResults(matches);
+        }
+        
+        closeVariantModal();
+        return;
+    }
+    
+    // Can't be a variant of itself
+    if (currentVariantSong === selectedParentSong) {
+        alert('A track cannot be a variant of itself.');
+        return;
+    }
+    
+    trackVariants[variantKey] = selectedParentSong;
+    saveTrackVariants();
+    
+    // Refresh the table display to show the variant indicator
+    displayTableFormat(matches);
+    
+    closeVariantModal();
+    
+    // If we're currently viewing spingrid, refresh it
+    if (currentResultFormat === 'spingrid') {
+        displayResults(matches);
+    }
+}
+
+// Helper function to get parent song for a variant (or return the song itself if not a variant)
+function getParentSong(artist, song) {
+    const variantKey = `${artist}|${song}`;
+    return trackVariants[variantKey] || song;
+}

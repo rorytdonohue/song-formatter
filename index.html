@@ -55,7 +55,7 @@
                     </div>
                     <div style="margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap;">
                         <button class="process-btn" id="findBtn" onclick="findMatches()">find matches</button>
-                        <button class="download-btn" id="downloadCsvBtn" onclick="downloadCSV()" disabled>Download CSV</button>
+                        <button class="download-btn" id="downloadCsvBtn" onclick="downloadCSV()" disabled>Download Spinitron</button>
                         <button class="reset-btn" onclick="resetApp()">cancel</button>
                     </div>
                     <div id="summary" style="margin-top:12px; color:#4a5568;"></div>
@@ -69,7 +69,6 @@
                     <h3>search results</h3>
                     <div class="format-toggles">
                         <button class="format-btn active" onclick="setResultFormat('table')" id="tableFormatBtn">Table View</button>
-                        <button class="format-btn" onclick="setResultFormat('count')" id="countFormatBtn">Song Count</button>
                         <button class="format-btn" onclick="setResultFormat('station')" id="stationFormatBtn">Station Format</button>
                         <button class="format-btn" onclick="setResultFormat('spingrid')" id="spingridFormatBtn">Spingrid</button>
                     </div>
@@ -84,21 +83,12 @@
                                     <th>station</th>
                                     <th>artist</th>
                                     <th>song</th>
+                                    <th>actions</th>
                                 </tr>
                             </thead>
                             <tbody id="resultsTableBody">
                             </tbody>
                         </table>
-                    </div>
-                </div>
-                
-                <!-- Count Format -->
-                <div id="countFormat" class="result-format" style="display: none;">
-                    <div class="format-actions">
-                        <button class="download-btn" onclick="copyCountFormatForExcel()">copy for excel</button>
-                    </div>
-                    <div class="results-text-container">
-                        <div id="countResultsBody"></div>
                     </div>
                 </div>
                 
@@ -123,7 +113,7 @@
             <!-- Spinitron Formatter Section -->
             <section class="load-section" id="loadSection">
                 <h3>spinitron formatter</h3>
-                <p>upload a csv file with spin data to format and analyze.</p>
+                <p>upload a spinitron file with spin data to format and analyze.</p>
                 <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="handleCsvUpload()">
                 <button class="process-btn" onclick="document.getElementById('csvFile').click()">click to upload</button>
             </section>
@@ -139,7 +129,7 @@
                 <div class="modal-body">
                     <div class="admin-controls">
                         <input type="password" id="adminPassword" placeholder="admin password">
-                        <input type="file" id="adminFile" accept=".xlsx,.xls">
+                        <input type="file" id="adminFile" accept=".xlsx,.xls" title="Upload Online Radio Box file">
                         <button class="process-btn" onclick="adminUpload()">upload/replace</button>
                         <button class="reset-btn" onclick="adminDelete()">delete</button>
                         <button class="download-btn" onclick="adminRefreshStatus()">refresh status</button>
@@ -208,6 +198,29 @@
                             <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importTracklists()">                                                                                    
                             <button class="download-btn" onclick="document.getElementById('importFile').click()">import database</button>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Variant Modal -->
+        <div id="variantModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>select parent track</h3>
+                    <button class="close-btn" onclick="closeVariantModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="variant-info">
+                        <p><strong>Making variant:</strong> <span id="variantTrackInfo"></span></p>
+                        <p style="color: #718096; font-size: 0.9em; margin-top: 10px;">Select the parent track this should be grouped under in the spingrid view.</p>
+                    </div>
+                    <div id="variantTracklistContainer" class="variant-tracklist-container">
+                        <!-- Tracklist will be displayed here -->
+                    </div>
+                    <div class="variant-actions" style="margin-top: 20px;">
+                        <button class="reset-btn" onclick="clearVariant()">Clear Variant</button>
+                        <button class="process-btn" onclick="saveVariant()">Save Variant</button>
                     </div>
                 </div>
             </div>
