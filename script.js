@@ -106,17 +106,62 @@ function handleCsvUpload() {
     reader.readAsText(file);
 }
 
-// Parse CSV text into array of objects
+// Parse CSV text into array of objects (handles quoted fields properly)
 function parseCSV(csvText) {
-    const lines = csvText.split('\n').filter(line => line.trim());
+    if (!csvText || !csvText.trim()) return [];
+    
+    const lines = [];
+    let currentLine = '';
+    let inQuotes = false;
+    
+    // Handle quoted fields that may contain newlines
+    for (let i = 0; i < csvText.length; i++) {
+        const char = csvText[i];
+        const nextChar = csvText[i + 1];
+        
+        if (char === '"') {
+            if (inQuotes && nextChar === '"') {
+                // Escaped quote
+                currentLine += '"';
+                i++; // Skip next quote
+            } else {
+                // Toggle quote state
+                inQuotes = !inQuotes;
+                currentLine += char;
+            }
+        } else if (char === '\n' || char === '\r') {
+            if (inQuotes) {
+                // Newline inside quoted field
+                currentLine += char;
+            } else {
+                // End of line
+                if (currentLine.trim()) {
+                    lines.push(currentLine);
+                }
+                currentLine = '';
+            }
+        } else {
+            currentLine += char;
+        }
+    }
+    
+    // Add last line if exists
+    if (currentLine.trim()) {
+        lines.push(currentLine);
+    }
+    
     if (lines.length === 0) return [];
     
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+    // Parse headers
+    const headers = parseCSVLine(lines[0]);
+    if (headers.length === 0) return [];
+    
     const data = [];
     
+    // Parse data rows
     for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
-        if (values.length >= headers.length) {
+        const values = parseCSVLine(lines[i]);
+        if (values.length > 0) {
             const row = {};
             headers.forEach((header, index) => {
                 row[header] = values[index] || '';
@@ -126,6 +171,40 @@ function parseCSV(csvText) {
     }
     
     return data;
+}
+
+// Parse a single CSV line respecting quoted fields
+function parseCSVLine(line) {
+    const values = [];
+    let currentValue = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const nextChar = line[i + 1];
+        
+        if (char === '"') {
+            if (inQuotes && nextChar === '"') {
+                // Escaped quote
+                currentValue += '"';
+                i++; // Skip next quote
+            } else {
+                // Toggle quote state
+                inQuotes = !inQuotes;
+            }
+        } else if (char === ',' && !inQuotes) {
+            // Field separator (only outside quotes)
+            values.push(currentValue.trim());
+            currentValue = '';
+        } else {
+            currentValue += char;
+        }
+    }
+    
+    // Add last value
+    values.push(currentValue.trim());
+    
+    return values;
 }
 
 // Process Spinitron data and display results
@@ -780,7 +859,22 @@ function displaySpingridFormatInContainer(matches, container) {
                         }
                     });
                     
-                    const parentSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];
+                    // Try exact match first for parent track
+                    let parentSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];
+                    
+                    // If not found, try fuzzy match
+                    if (!parentSpins && spinCounts[tracklistArtist]) {
+                        const parentSongNorm = normalizeText(songName);
+                        const foundMatch = Object.keys(spinCounts[tracklistArtist]).find(spinSong => {
+                            const spinSongNorm = normalizeText(spinSong);
+                            return parentSongNorm === spinSongNorm || 
+                                   similarityRatio(parentSongNorm, spinSongNorm) >= FUZZY_THRESHOLD;
+                        });
+                        if (foundMatch) {
+                            parentSpins = spinCounts[tracklistArtist][foundMatch];
+                        }
+                    }
+                    
                     if (parentSpins) {
                         Object.entries(parentSpins).forEach(([station, count]) => {
                             if (!parentGroups[songName].spins[station]) {
@@ -819,7 +913,21 @@ function displaySpingridFormatInContainer(matches, container) {
             
             // Display standalone songs
             standaloneSongs.forEach(songName => {
-                const songSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];
+                // Try exact match first
+                let songSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];
+                
+                // If not found, try fuzzy match with all songs in spinCounts
+                if (!songSpins && spinCounts[tracklistArtist]) {
+                    const dbSongNorm = normalizeText(songName);
+                    const foundMatch = Object.keys(spinCounts[tracklistArtist]).find(spinSong => {
+                        const spinSongNorm = normalizeText(spinSong);
+                        return dbSongNorm === spinSongNorm || 
+                               similarityRatio(dbSongNorm, spinSongNorm) >= FUZZY_THRESHOLD;
+                    });
+                    if (foundMatch) {
+                        songSpins = spinCounts[tracklistArtist][foundMatch];
+                    }
+                }
                 
                 if (songSpins) {
                     const totalCount = Object.values(songSpins).reduce((sum, count) => sum + count, 0);
@@ -1643,8 +1751,22 @@ function displaySpingridFormat(matches) {
                         }
                     });
                     
-                    // Also add spins from the parent track itself
-                    const parentSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];
+                    // Also add spins from the parent track itself (try fuzzy match)
+                    let parentSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];
+                    
+                    // If not found, try fuzzy match
+                    if (!parentSpins && spinCounts[tracklistArtist]) {
+                        const parentSongNorm = normalizeText(songName);
+                        const foundMatch = Object.keys(spinCounts[tracklistArtist]).find(spinSong => {
+                            const spinSongNorm = normalizeText(spinSong);
+                            return parentSongNorm === spinSongNorm || 
+                                   similarityRatio(parentSongNorm, spinSongNorm) >= FUZZY_THRESHOLD;
+                        });
+                        if (foundMatch) {
+                            parentSpins = spinCounts[tracklistArtist][foundMatch];
+                        }
+                    }
+                    
                     if (parentSpins) {
                         Object.entries(parentSpins).forEach(([station, count]) => {
                             if (!parentGroups[songName].spins[station]) {
@@ -1694,7 +1816,21 @@ function displaySpingridFormat(matches) {
             
             // Display standalone songs (not variants, have no variants)
             standaloneSongs.forEach(songName => {
-                const songSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];
+                // Try exact match first
+                let songSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];
+                
+                // If not found, try fuzzy match with all songs in spinCounts
+                if (!songSpins && spinCounts[tracklistArtist]) {
+                    const dbSongNorm = normalizeText(songName);
+                    const foundMatch = Object.keys(spinCounts[tracklistArtist]).find(spinSong => {
+                        const spinSongNorm = normalizeText(spinSong);
+                        return dbSongNorm === spinSongNorm || 
+                               similarityRatio(dbSongNorm, spinSongNorm) >= FUZZY_THRESHOLD;
+                    });
+                    if (foundMatch) {
+                        songSpins = spinCounts[tracklistArtist][foundMatch];
+                    }
+                }
                 
                 if (songSpins) {
                     // Song has spins - show count and stations
