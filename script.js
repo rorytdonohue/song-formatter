@@ -67,48 +67,94 @@ function initializeApp() {
 // Handle Spinitron upload for Spinitron formatter
 function handleCsvUpload() {
     const fileInput = document.getElementById('csvFile');
-    const file = fileInput.files[0];
+    if (!fileInput) {
+        console.error('CSV file input not found');
+        alert('Error: File input not found. Please refresh the page.');
+        return;
+    }
     
-    if (!file) return;
+    const file = fileInput.files[0];
+    if (!file) {
+        console.warn('No file selected');
+        return;
+    }
+    
+    console.log('File selected:', file.name, file.type, file.size);
     
     // Clear previous data when uploading a new file
     spinitronMatches = [];
     onlineradioboxMatches = [];
     matches = [];
     
-    // Clear results display
+    // Clear results display (but don't clear innerHTML - it contains the structure)
     const resultsDisplay = document.getElementById('resultsDisplay');
     if (resultsDisplay) {
         resultsDisplay.style.display = 'none';
-        resultsDisplay.innerHTML = '';
+        // Don't clear innerHTML - it contains the table/spingrid structure we need
+        // Just clear the content containers
+        const tableBody = document.getElementById('resultsTableBody');
+        if (tableBody) tableBody.innerHTML = '';
+        const stationBody = document.getElementById('stationResultsBody');
+        if (stationBody) stationBody.innerHTML = '';
+        const spingridBody = document.getElementById('spingridResultsBody');
+        if (spingridBody) spingridBody.innerHTML = '';
     }
     
+    // Reset file input value so same file can be uploaded again if needed
+    // We'll do this after processing to avoid clearing before read completes
+    
     const reader = new FileReader();
+    
+    reader.onerror = function(error) {
+        console.error('FileReader error:', error);
+        alert('Error reading file: ' + (error.target?.error?.message || 'Unknown error'));
+    };
+    
     reader.onload = function(e) {
         try {
             const csvText = e.target.result;
+            console.log('File read, length:', csvText.length);
+            console.log('First 200 chars:', csvText.substring(0, 200));
+            
             const csvData = parseCSV(csvText);
+            console.log('Parsed CSV data:', csvData.length, 'rows');
             
             if (csvData.length === 0) {
-                alert('Spinitron file appears to be empty.');
+                alert('Spinitron file appears to be empty or could not be parsed. Please check the file format.');
                 return;
             }
             
             // Process the Spinitron data and show results
             processCsvData(csvData);
             
+            // Reset file input after successful processing
+            // This allows uploading the same file again if needed
+            fileInput.value = '';
+            
         } catch (error) {
-            console.error('Error reading Spinitron:', error);
-            alert('Error reading Spinitron file. Please make sure it\'s a valid CSV file.');
+            console.error('Error parsing Spinitron:', error);
+            console.error('Error stack:', error.stack);
+            alert('Error reading Spinitron file: ' + error.message + '\n\nPlease make sure it\'s a valid CSV file.');
+            
+            // Reset file input on error too
+            fileInput.value = '';
         }
     };
     
-    reader.readAsText(file);
+    try {
+        reader.readAsText(file);
+    } catch (error) {
+        console.error('Error starting file read:', error);
+        alert('Error starting file upload: ' + error.message);
+    }
 }
 
 // Parse CSV text into array of objects (handles quoted fields properly)
 function parseCSV(csvText) {
-    if (!csvText || !csvText.trim()) return [];
+    if (!csvText || !csvText.trim()) {
+        console.warn('parseCSV: Empty or whitespace-only input');
+        return [];
+    }
     
     const lines = [];
     let currentLine = '';
@@ -129,7 +175,7 @@ function parseCSV(csvText) {
                 inQuotes = !inQuotes;
                 currentLine += char;
             }
-        } else if (char === '\n' || char === '\r') {
+        } else if (char === '\n' || (char === '\r' && nextChar !== '\n')) {
             if (inQuotes) {
                 // Newline inside quoted field
                 currentLine += char;
@@ -140,7 +186,8 @@ function parseCSV(csvText) {
                 }
                 currentLine = '';
             }
-        } else {
+        } else if (char !== '\r') {
+            // Skip standalone \r (will be part of \r\n which we handle above)
             currentLine += char;
         }
     }
@@ -150,11 +197,21 @@ function parseCSV(csvText) {
         lines.push(currentLine);
     }
     
-    if (lines.length === 0) return [];
+    if (lines.length === 0) {
+        console.warn('parseCSV: No lines found after parsing');
+        return [];
+    }
+    
+    console.log('parseCSV: Parsed', lines.length, 'lines');
     
     // Parse headers
     const headers = parseCSVLine(lines[0]);
-    if (headers.length === 0) return [];
+    if (headers.length === 0) {
+        console.warn('parseCSV: No headers found');
+        return [];
+    }
+    
+    console.log('parseCSV: Headers:', headers);
     
     const data = [];
     
@@ -170,6 +227,7 @@ function parseCSV(csvText) {
         }
     }
     
+    console.log('parseCSV: Parsed', data.length, 'data rows');
     return data;
 }
 
@@ -209,28 +267,79 @@ function parseCSVLine(line) {
 
 // Process Spinitron data and display results
 function processCsvData(csvData) {
+    console.log('processCsvData: Starting with', csvData.length, 'rows');
+    
+    // Log available columns from first row
+    if (csvData.length > 0) {
+        console.log('processCsvData: Available columns:', Object.keys(csvData[0]));
+        console.log('processCsvData: First row sample:', csvData[0]);
+    }
+    
     // Convert Spinitron data to matches format
     matches = [];
     
-    csvData.forEach(row => {
+    csvData.forEach((row, index) => {
         // Try to extract station, artist, and song from various possible column names
-        const station = row['Station'] || row['station'] || row['Show'] || row['show'] || 'Unknown';
-        const artist = row['Artist'] || row['artist'] || row['Performer'] || row['performer'] || '';
-        const song = row['Song'] || row['song'] || row['Title'] || row['title'] || '';
+        // Check all column names case-insensitively
+        const rowKeys = Object.keys(row);
+        let station = 'Unknown';
+        let artist = '';
+        let song = '';
         
-        if (song) {
+        // Find station column (case-insensitive)
+        const stationKey = rowKeys.find(key => 
+            /station|show|program|playlist/i.test(key)
+        );
+        if (stationKey) {
+            station = row[stationKey] || 'Unknown';
+        }
+        
+        // Find artist column (case-insensitive)
+        const artistKey = rowKeys.find(key => 
+            /artist|performer|singer|band/i.test(key)
+        );
+        if (artistKey) {
+            artist = row[artistKey] || '';
+        }
+        
+        // Find song column (case-insensitive)
+        const songKey = rowKeys.find(key => 
+            /song|title|track|name/i.test(key)
+        );
+        if (songKey) {
+            song = row[songKey] || '';
+        }
+        
+        // Fallback: try common variations
+        if (!station || station === 'Unknown') {
+            station = row['Station'] || row['station'] || row['Show'] || row['show'] || 'Unknown';
+        }
+        if (!artist) {
+            artist = row['Artist'] || row['artist'] || row['Performer'] || row['performer'] || '';
+        }
+        if (!song) {
+            song = row['Song'] || row['song'] || row['Title'] || row['title'] || '';
+        }
+        
+        if (song && song.trim()) {
             // If no artist column, we'll need to prompt user for artist name
-            if (artist) {
+            if (artist && artist.trim()) {
                 matches.push({ station, artist, song });
             } else {
                 // Store without artist for now - we'll handle this case
                 matches.push({ station, artist: '', song });
             }
+        } else if (index === 0) {
+            // Log warning on first row if we can't find song
+            console.warn('processCsvData: Could not find song column in row', index, 'Available keys:', rowKeys);
         }
     });
     
+    console.log('processCsvData: Extracted', matches.length, 'matches');
+    
     if (matches.length === 0) {
-        alert('No valid spin data found in Spinitron. Please check that your Spinitron file has columns for Station and Song.');
+        const availableColumns = csvData.length > 0 ? Object.keys(csvData[0]).join(', ') : 'none';
+        alert(`No valid spin data found in Spinitron file.\n\nAvailable columns: ${availableColumns}\n\nPlease check that your Spinitron file has columns for Station/Show and Song/Title.`);
         return;
     }
     
@@ -280,8 +389,25 @@ function processCsvData(csvData) {
     // Store Spinitron data separately
     spinitronMatches = [...matches];
     
-    // Show the results display
+    console.log('processCsvData: Showing results display');
+    
+    // Show the results display - make sure we restore the HTML structure first
     const resultsDisplay = document.getElementById('resultsDisplay');
+    if (!resultsDisplay) {
+        console.error('processCsvData: resultsDisplay element not found!');
+        alert('Error: Results display element not found. Please refresh the page.');
+        return;
+    }
+    
+    // Restore results display structure if it was cleared
+    if (!resultsDisplay.innerHTML || resultsDisplay.innerHTML.trim() === '') {
+        console.warn('processCsvData: Results display was cleared, restoring structure');
+        // The HTML structure should be in index.html, but if innerHTML was cleared,
+        // we need to make sure the display still works
+        // Actually, since we're setting innerHTML to '' in handleCsvUpload, 
+        // we shouldn't be clearing it - let's just not clear it
+    }
+    
     resultsDisplay.style.display = 'block';
     
     // Keep the load section visible so user can upload a new file to replace this one
@@ -293,6 +419,8 @@ function processCsvData(csvData) {
     // Add Find Matches button for Online Radio Box data
     addFindMatchesButton();
     
+    console.log('processCsvData: Calling displayResults with', matches.length, 'matches');
+    
     // Display Spinitron results in current format
     displayResults(matches);
     
@@ -301,6 +429,8 @@ function processCsvData(csvData) {
     if (summaryEl) {
         summaryEl.textContent = `${matches.length} spins loaded from Spinitron file. Found ${foundArtists.length} artists: ${foundArtists.join(', ')}. Click "Find Matches" to search Online Radio Box file.`;
     }
+    
+    console.log('processCsvData: Completed successfully');
 }
 
 // Find artists from Spinitron data that match tracklist database

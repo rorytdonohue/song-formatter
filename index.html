@@ -55,7 +55,7 @@
                     </div>
                     <div style="margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap;">
                         <button class="process-btn" id="findBtn" onclick="findMatches()">find matches</button>
-                        <button class="download-btn" id="downloadCsvBtn" onclick="downloadCSV()" disabled>Download Spinitron</button>
+                        <button class="download-btn" id="downloadCsvBtn" onclick="downloadCSV()" disabled>download csv</button>
                         <button class="reset-btn" onclick="resetApp()">cancel</button>
                     </div>
                     <div id="summary" style="margin-top:12px; color:#4a5568;"></div>
@@ -114,7 +114,7 @@
             <section class="load-section" id="loadSection">
                 <h3>spinitron formatter</h3>
                 <p>upload a spinitron file with spin data to format and analyze.</p>
-                <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="handleCsvUpload()">
+                <input type="file" id="csvFile" accept=".csv,text/csv,application/vnd.ms-excel" style="display: none;" onchange="handleCsvUpload()">
                 <button class="process-btn" onclick="document.getElementById('csvFile').click()">click to upload</button>
             </section>
         </main>
