@@ -71,6 +71,18 @@ function handleCsvUpload() {
     
     if (!file) return;
     
+    // Clear previous data when uploading a new file
+    spinitronMatches = [];
+    onlineradioboxMatches = [];
+    matches = [];
+    
+    // Clear results display
+    const resultsDisplay = document.getElementById('resultsDisplay');
+    if (resultsDisplay) {
+        resultsDisplay.style.display = 'none';
+        resultsDisplay.innerHTML = '';
+    }
+    
     const reader = new FileReader();
     reader.onload = function(e) {
         try {
@@ -193,8 +205,8 @@ function processCsvData(csvData) {
     const resultsDisplay = document.getElementById('resultsDisplay');
     resultsDisplay.style.display = 'block';
     
-    // Hide the load section
-    document.getElementById('loadSection').style.display = 'none';
+    // Keep the load section visible so user can upload a new file to replace this one
+    // Don't hide it - just keep it available for new uploads
     
     // Set up the artist names input with found artists
     setupCsvArtistInput(foundArtists);
@@ -1005,8 +1017,8 @@ function processCsvDataFallback(matches) {
     const resultsDisplay = document.getElementById('resultsDisplay');
     resultsDisplay.style.display = 'block';
     
-    // Hide the load section
-    document.getElementById('loadSection').style.display = 'none';
+    // Keep the load section visible so user can upload a new file to replace this one
+    // Don't hide it - just keep it available for new uploads
     
     // Show fallback results with limited formatting options
     showCsvFallbackResults(matches);
@@ -1024,6 +1036,7 @@ function showCsvFallbackResults(matches) {
     resultsDisplay.innerHTML = `
         <div class="results-header">
             <h3>Spinitron Results (Fallback Mode)</h3>
+        </div>
             <div class="fallback-notice">
                 <p><strong>Note:</strong> No matching artists found in tracklist database. Showing basic analysis only.</p>
             </div>
@@ -1464,15 +1477,25 @@ function displayTableFormat(matches) {
         const isVariant = trackVariants[variantKey];
         const variantIndicator = isVariant ? ` <span style="color: #718096; font-size: 0.85em;">(variant of ${escapeHtml(isVariant)})</span>` : '';
         
+        // Check if this track is in the tracklist database (recognized in spingrid)
+        const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
+            artist.toLowerCase() === match.artist.toLowerCase()
+        );
+        const isInTracklist = tracklistArtist && tracklistDatabase[tracklistArtist] && 
+            isSongInTracklistFuzzy(tracklistArtist, match.song);
+        
+        // Only show "make variant" button if track is NOT in tracklist database
+        const variantButton = !isInTracklist ? `
+            <button class="variant-btn" onclick="openVariantModal('${escapeHtml(match.artist)}', '${escapeHtml(match.song)}')" title="Make this track a variant of another track">
+                make variant
+            </button>
+        ` : '<span style="color: #718096; font-size: 0.85em;">in tracklist</span>';
+        
         row.innerHTML = `
             <td>${escapeHtml(match.station)}</td>
             <td>${escapeHtml(match.artist)}</td>
             <td>${escapeHtml(match.song)}${variantIndicator}</td>
-            <td>
-                <button class="variant-btn" onclick="openVariantModal('${escapeHtml(match.artist)}', '${escapeHtml(match.song)}')" title="Make this track a variant of another track">
-                    make variant
-                </button>
-            </td>
+            <td>${variantButton}</td>
         `;
         resultsTableBody.appendChild(row);
     });
@@ -1847,8 +1870,31 @@ function safeCell(row, idx) {
 }
 
 // -------------- Fuzzy matching helpers --------------
+// Remove "(feat. ...)" and similar patterns from track names
+function removeFeatInfo(str) {
+    if (!str) return str;
+    let cleaned = String(str);
+    
+    // Remove patterns like "(feat. Artist)", "(feat Artist)", "(ft. Artist)", "(ft Artist)", etc.
+    // Also handle variations with different punctuation
+    cleaned = cleaned.replace(/\s*\(feat\.?\s+[^)]+\)/gi, ''); // (feat. Artist) or (feat Artist)
+    cleaned = cleaned.replace(/\s*\(ft\.?\s+[^)]+\)/gi, ''); // (ft. Artist) or (ft Artist)
+    cleaned = cleaned.replace(/\s*\(featuring\s+[^)]+\)/gi, ''); // (featuring Artist)
+    cleaned = cleaned.replace(/\s*\(with\s+[^)]+\)/gi, ''); // (with Artist)
+    
+    // Handle patterns without parentheses
+    cleaned = cleaned.replace(/\s+feat\.?\s+[^(]+(?:\s*\(|$)/gi, ''); // feat. Artist (with optional trailing)
+    cleaned = cleaned.replace(/\s+ft\.?\s+[^(]+(?:\s*\(|$)/gi, ''); // ft. Artist
+    
+    return cleaned.trim();
+}
+
 function normalizeText(str) {
     if (!str) return '';
+    
+    // First remove feat information
+    str = removeFeatInfo(str);
+    
     return String(str)
         .toLowerCase()
         .normalize('NFKD')
@@ -2397,6 +2443,9 @@ function isSongInTracklist(artistName, songName) {
         return false;
     }
     
+    // Normalize both song name and database songs by removing feat info
+    const normalizedSongName = removeFeatInfo(songName).toLowerCase().trim();
+    
     // Check for exact match first
     if (tracklistDatabase[artistName].includes(songName)) {
         return true;
@@ -2404,9 +2453,16 @@ function isSongInTracklist(artistName, songName) {
     
     // Check for case-insensitive match
     const lowerSongName = songName.toLowerCase();
-    return tracklistDatabase[artistName].some(song => 
+    const exactMatch = tracklistDatabase[artistName].some(song => 
         song.toLowerCase() === lowerSongName
     );
+    if (exactMatch) return true;
+    
+    // Check for match after removing feat info
+    return tracklistDatabase[artistName].some(song => {
+        const normalizedDbSong = removeFeatInfo(song).toLowerCase().trim();
+        return normalizedDbSong === normalizedSongName;
+    });
 }
 
 // Fuzzy version that tolerates typos/apostrophes (90% threshold)
