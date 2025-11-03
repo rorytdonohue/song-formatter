@@ -955,6 +955,7 @@ function displaySpingridFormatInContainer(matches, container) {
         if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
             // Artist has tracks in database - show all their songs
             const songs = tracklistDatabase[tracklistArtist];
+            const tracklistArtistLower = tracklistArtist.toLowerCase();
             
             // Group variants under their parent tracks (same logic as main displaySpingridFormat)
             const parentGroups = {};
@@ -962,7 +963,6 @@ function displaySpingridFormatInContainer(matches, container) {
             
             songs.forEach(songName => {
                 // Check if this song is itself a variant (case-insensitive artist matching)
-                const tracklistArtistLower = tracklistArtist.toLowerCase();
                 const normalizedSongName = normalizeText(songName);
                 const isVariant = Object.entries(trackVariants).some(([key, parent]) => {
                     const [variantArtist, variantSong] = key.split('|');
@@ -1067,32 +1067,44 @@ function displaySpingridFormatInContainer(matches, container) {
                 }
             });
             
-            // Display standalone songs
+            // Display standalone songs - group by normalized name to handle case variations
+            const groupedStandaloneSongs = {};
             standaloneSongs.forEach(songName => {
-                // Try exact match first (normalize to match normalized keys)
                 const normalizedSong = normalizeText(songName);
-                let songSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][normalizedSong];
-                
-                // If not found, try fuzzy match with all songs in spinCounts (keys are already normalized)
-                if (!songSpins && spinCounts[tracklistArtist]) {
-                    const foundMatch = Object.keys(spinCounts[tracklistArtist]).find(spinSong => {
-                        return normalizedSong === spinSong || 
-                               similarityRatio(normalizedSong, spinSong) >= FUZZY_THRESHOLD;
-                    });
-                    if (foundMatch) {
-                        songSpins = spinCounts[tracklistArtist][foundMatch];
-                    }
+                if (!groupedStandaloneSongs[normalizedSong]) {
+                    groupedStandaloneSongs[normalizedSong] = {
+                        displayName: songName, // Use first occurrence as display name
+                        aggregatedSpins: {}
+                    };
                 }
+                // Aggregate spins from all case variations
+                const normalizedSongKey = normalizeText(songName);
+                const matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
+                const songSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedSongKey];
                 
                 if (songSpins) {
-                    const totalCount = Object.values(songSpins).reduce((sum, count) => sum + count, 0);
-                    const stationList = Object.entries(songSpins)
+                    Object.entries(songSpins).forEach(([station, count]) => {
+                        if (!groupedStandaloneSongs[normalizedSong].aggregatedSpins[station]) {
+                            groupedStandaloneSongs[normalizedSong].aggregatedSpins[station] = 0;
+                        }
+                        groupedStandaloneSongs[normalizedSong].aggregatedSpins[station] += count;
+                    });
+                }
+            });
+            
+            // Display grouped standalone songs
+            Object.entries(groupedStandaloneSongs).forEach(([normalizedKey, group]) => {
+                const aggregatedSpins = group.aggregatedSpins;
+                const totalCount = Object.values(aggregatedSpins).reduce((sum, count) => sum + count, 0);
+                
+                if (totalCount > 0) {
+                    const stationList = Object.entries(aggregatedSpins)
                         .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
                         .join(', ');
                     
-                    html += `<div class="song-count-entry"><span class="song-name-cell">${escapeHtml(songName)}</span><span class="count-cell">${totalCount}</span><span class="station-cell">${escapeHtml(stationList)}</span></div>`;
+                    html += `<div class="song-count-entry"><span class="song-name-cell">${escapeHtml(group.displayName)}</span><span class="count-cell">${totalCount}</span><span class="station-cell">${escapeHtml(stationList)}</span></div>`;
                 } else {
-                    html += `<div class="song-count-entry"><span class="song-name-cell">${escapeHtml(songName)}</span><span class="count-cell"></span><span class="station-cell"></span></div>`;
+                    html += `<div class="song-count-entry"><span class="song-name-cell">${escapeHtml(group.displayName)}</span><span class="count-cell"></span><span class="station-cell"></span></div>`;
                 }
             });
         } else {
@@ -1213,19 +1225,23 @@ function copyMergedSpingridForExcel() {
         return;
     }
     
-    // Group matches by artist and song for spin counts
+    // Group matches by artist and song for spin counts (use normalized keys like display)
     const spinCounts = {};
     combinedMatches.forEach(match => {
         if (!spinCounts[match.artist]) {
             spinCounts[match.artist] = {};
         }
-        if (!spinCounts[match.artist][match.song]) {
-            spinCounts[match.artist][match.song] = {};
+        
+        // Normalize song name for grouping (case-insensitive)
+        const normalizedSong = normalizeText(match.song);
+        
+        if (!spinCounts[match.artist][normalizedSong]) {
+            spinCounts[match.artist][normalizedSong] = {};
         }
-        if (!spinCounts[match.artist][match.song][match.station]) {
-            spinCounts[match.artist][match.song][match.station] = 0;
+        if (!spinCounts[match.artist][normalizedSong][match.station]) {
+            spinCounts[match.artist][normalizedSong][match.station] = 0;
         }
-        spinCounts[match.artist][match.song][match.station]++;
+        spinCounts[match.artist][normalizedSong][match.station]++;
     });
     
     let excelData = '';
@@ -1240,23 +1256,47 @@ function copyMergedSpingridForExcel() {
         );
         
         if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
-            // Artist has tracks in database - show all their songs
+            // Artist has tracks in database - group by normalized name to handle duplicates
             const songs = tracklistDatabase[tracklistArtist];
+            const tracklistArtistLower = tracklistArtist.toLowerCase();
+            
+            // Group songs by normalized name (to handle case variations in database)
+            const groupedSongs = {};
             songs.forEach(songName => {
-                // Check if this song has spins
-                const songSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];
+                const normalizedSong = normalizeText(songName);
+                if (!groupedSongs[normalizedSong]) {
+                    groupedSongs[normalizedSong] = {
+                        displayName: songName, // Use first occurrence as display name
+                        aggregatedSpins: {}
+                    };
+                }
+                
+                // Aggregate spins from all case variations
+                const matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
+                const songSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedSong];
                 
                 if (songSpins) {
-                    // Song has spins - show count and stations
-                    const totalCount = Object.values(songSpins).reduce((sum, count) => sum + count, 0);
-                    const stationList = Object.entries(songSpins)
+                    Object.entries(songSpins).forEach(([station, count]) => {
+                        if (!groupedSongs[normalizedSong].aggregatedSpins[station]) {
+                            groupedSongs[normalizedSong].aggregatedSpins[station] = 0;
+                        }
+                        groupedSongs[normalizedSong].aggregatedSpins[station] += count;
+                    });
+                }
+            });
+            
+            // Display grouped songs
+            Object.entries(groupedSongs).forEach(([normalizedKey, group]) => {
+                const aggregatedSpins = group.aggregatedSpins;
+                const totalCount = Object.values(aggregatedSpins).reduce((sum, count) => sum + count, 0);
+                
+                if (totalCount > 0) {
+                    const stationList = Object.entries(aggregatedSpins)
                         .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
                         .join(', ');
-                    
-                    excelData += `${songName}\t${totalCount}\t${stationList}\n`;
+                    excelData += `${group.displayName}\t${totalCount}\t${stationList}\n`;
                 } else {
-                    // Song has no spins - show empty
-                    excelData += `${songName}\t\t\n`;
+                    excelData += `${group.displayName}\t\t\n`;
                 }
             });
         }
@@ -1887,6 +1927,7 @@ function displaySpingridFormat(matches) {
         if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
             // Artist has tracks in database - show all their songs
             const songs = tracklistDatabase[tracklistArtist];
+            const tracklistArtistLower = tracklistArtist.toLowerCase();
             
             // Group variants under their parent tracks
             const parentGroups = {}; // { parentSong: { variants: [...], spins: {...} } }
@@ -1894,7 +1935,6 @@ function displaySpingridFormat(matches) {
             
             songs.forEach(songName => {
                 // Check if this song is itself a variant (case-insensitive artist matching)
-                const tracklistArtistLower = tracklistArtist.toLowerCase();
                 const normalizedSongName = normalizeText(songName);
                 const isVariant = Object.entries(trackVariants).some(([key, parent]) => {
                     const [variantArtist, variantSong] = key.split('|');
@@ -2013,39 +2053,51 @@ function displaySpingridFormat(matches) {
                 }
             });
             
-            // Display standalone songs (not variants, have no variants)
+            // Display standalone songs (not variants, have no variants) - group by normalized name
+            const groupedStandaloneSongs = {};
             standaloneSongs.forEach(songName => {
-                // Try exact match first (normalize to match normalized keys)
                 const normalizedSong = normalizeText(songName);
-                let songSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][normalizedSong];
-                
-                // If not found, try fuzzy match with all songs in spinCounts (keys are already normalized)
-                if (!songSpins && spinCounts[tracklistArtist]) {
-                    const foundMatch = Object.keys(spinCounts[tracklistArtist]).find(spinSong => {
-                        return normalizedSong === spinSong || 
-                               similarityRatio(normalizedSong, spinSong) >= FUZZY_THRESHOLD;
-                    });
-                    if (foundMatch) {
-                        songSpins = spinCounts[tracklistArtist][foundMatch];
-                    }
+                if (!groupedStandaloneSongs[normalizedSong]) {
+                    groupedStandaloneSongs[normalizedSong] = {
+                        displayName: songName, // Use first occurrence as display name
+                        aggregatedSpins: {}
+                    };
                 }
+                // Aggregate spins from all case variations
+                const normalizedSongKey = normalizeText(songName);
+                const matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
+                const songSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedSongKey];
                 
                 if (songSpins) {
+                    Object.entries(songSpins).forEach(([station, count]) => {
+                        if (!groupedStandaloneSongs[normalizedSong].aggregatedSpins[station]) {
+                            groupedStandaloneSongs[normalizedSong].aggregatedSpins[station] = 0;
+                        }
+                        groupedStandaloneSongs[normalizedSong].aggregatedSpins[station] += count;
+                    });
+                }
+            });
+            
+            // Display grouped standalone songs
+            Object.entries(groupedStandaloneSongs).forEach(([normalizedKey, group]) => {
+                const aggregatedSpins = group.aggregatedSpins;
+                const totalCount = Object.values(aggregatedSpins).reduce((sum, count) => sum + count, 0);
+                
+                if (totalCount > 0) {
                     // Song has spins - show count and stations
-                    const totalCount = Object.values(songSpins).reduce((sum, count) => sum + count, 0);
-                    const stationList = Object.entries(songSpins)
+                    const stationList = Object.entries(aggregatedSpins)
                         .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
                         .join(', ');
                     
                     html += `<div class="song-count-entry">`;
-                    html += `<span class="song-name-cell">${escapeHtml(songName)}</span>`;
+                    html += `<span class="song-name-cell">${escapeHtml(group.displayName)}</span>`;
                     html += `<span class="count-cell">${totalCount}</span>`;
                     html += `<span class="station-cell">${escapeHtml(stationList)}</span>`;
                     html += `</div>`;
                 } else {
                     // Song has no spins - show empty
                     html += `<div class="song-count-entry">`;
-                    html += `<span class="song-name-cell">${escapeHtml(songName)}</span>`;
+                    html += `<span class="song-name-cell">${escapeHtml(group.displayName)}</span>`;
                     html += `<span class="count-cell"></span>`;
                     html += `<span class="station-cell"></span>`;
                     html += `</div>`;
@@ -2103,19 +2155,23 @@ function copySpingridForExcel() {
         return;
     }
     
-    // Group matches by artist and song for spin counts
+    // Group matches by artist and song for spin counts (use normalized keys like display)
     const spinCounts = {};
     matches.forEach(match => {
         if (!spinCounts[match.artist]) {
             spinCounts[match.artist] = {};
         }
-        if (!spinCounts[match.artist][match.song]) {
-            spinCounts[match.artist][match.song] = {};
+        
+        // Normalize song name for grouping (case-insensitive)
+        const normalizedSong = normalizeText(match.song);
+        
+        if (!spinCounts[match.artist][normalizedSong]) {
+            spinCounts[match.artist][normalizedSong] = {};
         }
-        if (!spinCounts[match.artist][match.song][match.station]) {
-            spinCounts[match.artist][match.song][match.station] = 0;
+        if (!spinCounts[match.artist][normalizedSong][match.station]) {
+            spinCounts[match.artist][normalizedSong][match.station] = 0;
         }
-        spinCounts[match.artist][match.song][match.station]++;
+        spinCounts[match.artist][normalizedSong][match.station]++;
     });
     
     let excelData = '';
@@ -2134,24 +2190,47 @@ function copySpingridForExcel() {
         excelData += `Song\tSpins\tStations\n`;
         
         if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
-            // Artist has tracks in database - show all their songs
+            // Artist has tracks in database - group by normalized name to handle duplicates
             const songs = tracklistDatabase[tracklistArtist];
+            const tracklistArtistLower = tracklistArtist.toLowerCase();
+            
+            // Group songs by normalized name (to handle case variations in database)
+            const groupedSongs = {};
             songs.forEach(songName => {
-                // Check if this song has spins
-                const songSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][songName];
+                const normalizedSong = normalizeText(songName);
+                if (!groupedSongs[normalizedSong]) {
+                    groupedSongs[normalizedSong] = {
+                        displayName: songName, // Use first occurrence as display name
+                        aggregatedSpins: {}
+                    };
+                }
+                
+                // Aggregate spins from all case variations
+                const matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
+                const songSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedSong];
                 
                 if (songSpins) {
-                    // Song has spins - show count and stations
-                    const totalCount = Object.values(songSpins).reduce((sum, count) => sum + count, 0);
-                    const stationList = Object.entries(songSpins)
+                    Object.entries(songSpins).forEach(([station, count]) => {
+                        if (!groupedSongs[normalizedSong].aggregatedSpins[station]) {
+                            groupedSongs[normalizedSong].aggregatedSpins[station] = 0;
+                        }
+                        groupedSongs[normalizedSong].aggregatedSpins[station] += count;
+                    });
+                }
+            });
+            
+            // Display grouped songs
+            Object.entries(groupedSongs).forEach(([normalizedKey, group]) => {
+                const aggregatedSpins = group.aggregatedSpins;
+                const totalCount = Object.values(aggregatedSpins).reduce((sum, count) => sum + count, 0);
+                
+                if (totalCount > 0) {
+                    const stationList = Object.entries(aggregatedSpins)
                         .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
                         .join(', ');
-                    
-                    // Format: Song Name | Spin Count | Station List (horizontal layout)
-                    excelData += `${songName}\t${totalCount}\t${stationList}\n`;
+                    excelData += `${group.displayName}\t${totalCount}\t${stationList}\n`;
                 } else {
-                    // Song has no spins - show empty
-                    excelData += `${songName}\t\t\n`;
+                    excelData += `${group.displayName}\t\t\n`;
                 }
             });
         } else {
