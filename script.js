@@ -961,17 +961,25 @@ function displaySpingridFormatInContainer(matches, container) {
             const standaloneSongs = [];
             
             songs.forEach(songName => {
-                const variantKey = `${tracklistArtist}|${songName}`;
-                const isVariant = trackVariants[variantKey];
+                // Check if this song is itself a variant (case-insensitive artist matching)
+                const tracklistArtistLower = tracklistArtist.toLowerCase();
+                const normalizedSongName = normalizeText(songName);
+                const isVariant = Object.entries(trackVariants).some(([key, parent]) => {
+                    const [variantArtist, variantSong] = key.split('|');
+                    const normalizedVariantSong = normalizeText(variantSong);
+                    return variantArtist.toLowerCase() === tracklistArtistLower && normalizedVariantSong === normalizedSongName;
+                });
                 
                 if (isVariant) {
                     return;
                 }
                 
                 // Check if this song is a parent (has variants pointing to it for this artist)
+                // Use case-insensitive matching for artist and normalize parent song for comparison
                 const hasVariants = Object.entries(trackVariants).some(([key, parent]) => {
                     const [variantArtist] = key.split('|');
-                    return variantArtist === tracklistArtist && parent === songName;
+                    const normalizedParent = normalizeText(parent);
+                    return variantArtist.toLowerCase() === tracklistArtistLower && normalizedParent === normalizedSongName;
                 });
                 
                 if (hasVariants) {
@@ -984,12 +992,15 @@ function displaySpingridFormatInContainer(matches, container) {
                     
                     Object.entries(trackVariants).forEach(([key, parent]) => {
                         const [variantArtist] = key.split('|');
-                        if (variantArtist === tracklistArtist && parent === songName) {
+                        const normalizedParent = normalizeText(parent);
+                        if (variantArtist.toLowerCase() === tracklistArtistLower && normalizedParent === normalizedSongName) {
                             const [, variantSong] = key.split('|');
                             if (variantSong) {
                                 parentGroups[songName].variants.push(variantSong);
                                 const normalizedVariant = normalizeText(variantSong);
-                                const variantSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][normalizedVariant];
+                                // Find matching artist in spinCounts (case-insensitive)
+                                const matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
+                                const variantSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedVariant];
                                 if (variantSpins) {
                                     Object.entries(variantSpins).forEach(([station, count]) => {
                                         if (!parentGroups[songName].spins[station]) {
@@ -1043,7 +1054,9 @@ function displaySpingridFormatInContainer(matches, container) {
                 if (group.variants.length > 0) {
                     group.variants.forEach(variantSong => {
                         const normalizedVariant = normalizeText(variantSong);
-                        const variantSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][normalizedVariant];
+                        // Find matching artist in spinCounts (case-insensitive)
+                        const matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
+                        const variantSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedVariant];
                         const variantCount = variantSpins ? Object.values(variantSpins).reduce((sum, count) => sum + count, 0) : 0;
                         const variantStationList = variantSpins ? Object.entries(variantSpins)
                             .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
@@ -1723,9 +1736,20 @@ function displayTableFormat(matches) {
     // Add rows for each match
     matches.forEach((match, index) => {
         const row = document.createElement('tr');
-        const variantKey = `${match.artist}|${match.song}`;
-        const isVariant = trackVariants[variantKey];
-        const variantIndicator = isVariant ? ` <span style="color: #718096; font-size: 0.85em;">(variant of ${escapeHtml(isVariant)})</span>` : '';
+        
+        // Check if this track is a variant (case-insensitive matching)
+        const matchArtistLower = match.artist.toLowerCase();
+        const normalizedMatchSong = normalizeText(match.song);
+        let variantParent = null;
+        for (const [key, parent] of Object.entries(trackVariants)) {
+            const [variantArtist, variantSong] = key.split('|');
+            const normalizedVariantSong = normalizeText(variantSong);
+            if (variantArtist.toLowerCase() === matchArtistLower && normalizedVariantSong === normalizedMatchSong) {
+                variantParent = parent;
+                break;
+            }
+        }
+        const variantIndicator = variantParent ? ` <span style="color: #718096; font-size: 0.85em;">(variant of ${escapeHtml(variantParent)})</span>` : '';
         
         // Check if this track is in the tracklist database (recognized in spingrid)
         const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
@@ -1735,17 +1759,27 @@ function displayTableFormat(matches) {
             isSongInTracklistFuzzy(tracklistArtist, match.song);
         
         // Only show "make variant" button if track is NOT in tracklist database
-        const variantButton = !isInTracklist ? `
-            <button class="variant-btn" onclick="openVariantModal('${escapeHtml(match.artist)}', '${escapeHtml(match.song)}')" title="Make this track a variant of another track">
-                make variant
-            </button>
-        ` : '<span style="color: #718096; font-size: 0.85em;">in tracklist</span>';
+        // If track is a variant, show variant info in actions column too
+        let actionContent = '';
+        if (isInTracklist) {
+            if (variantParent) {
+                actionContent = `<span style="color: #718096; font-size: 0.85em;">in tracklist • variant of ${escapeHtml(variantParent)}</span>`;
+            } else {
+                actionContent = '<span style="color: #718096; font-size: 0.85em;">in tracklist</span>';
+            }
+        } else {
+            actionContent = `
+                <button class="variant-btn" onclick="openVariantModal('${escapeHtml(match.artist)}', '${escapeHtml(match.song)}')" title="Make this track a variant of another track">
+                    make variant
+                </button>
+            `;
+        }
         
         row.innerHTML = `
             <td>${escapeHtml(match.station)}</td>
             <td>${escapeHtml(match.artist)}</td>
             <td>${escapeHtml(match.song)}${variantIndicator}</td>
-            <td>${variantButton}</td>
+            <td>${actionContent}</td>
         `;
         resultsTableBody.appendChild(row);
     });
@@ -1859,9 +1893,14 @@ function displaySpingridFormat(matches) {
             const standaloneSongs = []; // Songs that are not variants and have no variants
             
             songs.forEach(songName => {
-                // Check if this song is itself a variant
-                const variantKey = `${tracklistArtist}|${songName}`;
-                const isVariant = trackVariants[variantKey];
+                // Check if this song is itself a variant (case-insensitive artist matching)
+                const tracklistArtistLower = tracklistArtist.toLowerCase();
+                const normalizedSongName = normalizeText(songName);
+                const isVariant = Object.entries(trackVariants).some(([key, parent]) => {
+                    const [variantArtist, variantSong] = key.split('|');
+                    const normalizedVariantSong = normalizeText(variantSong);
+                    return variantArtist.toLowerCase() === tracklistArtistLower && normalizedVariantSong === normalizedSongName;
+                });
                 
                 if (isVariant) {
                     // This is a variant - skip it here, will be shown under parent
@@ -1869,9 +1908,11 @@ function displaySpingridFormat(matches) {
                 }
                 
                 // Check if this song is a parent (has variants pointing to it for this artist)
+                // Use case-insensitive matching for artist and normalize parent song for comparison
                 const hasVariants = Object.entries(trackVariants).some(([key, parent]) => {
                     const [variantArtist] = key.split('|');
-                    return variantArtist === tracklistArtist && parent === songName;
+                    const normalizedParent = normalizeText(parent);
+                    return variantArtist.toLowerCase() === tracklistArtistLower && normalizedParent === normalizedSongName;
                 });
                 
                 if (hasVariants) {
@@ -1886,7 +1927,8 @@ function displaySpingridFormat(matches) {
                     // Find all variants of this song (for this artist)
                     Object.entries(trackVariants).forEach(([key, parent]) => {
                         const [variantArtist] = key.split('|');
-                        if (variantArtist === tracklistArtist && parent === songName) {
+                        const normalizedParent = normalizeText(parent);
+                        if (variantArtist.toLowerCase() === tracklistArtistLower && normalizedParent === normalizedSongName) {
                             const [, variantSong] = key.split('|');
                             if (variantSong) {
                                 parentGroups[songName].variants.push(variantSong);
@@ -1954,7 +1996,9 @@ function displaySpingridFormat(matches) {
                 if (group.variants.length > 0) {
                     group.variants.forEach(variantSong => {
                         const normalizedVariant = normalizeText(variantSong);
-                        const variantSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][normalizedVariant];
+                        // Find matching artist in spinCounts (case-insensitive)
+                        const matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
+                        const variantSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedVariant];
                         const variantCount = variantSpins ? Object.values(variantSpins).reduce((sum, count) => sum + count, 0) : 0;
                         const variantStationList = variantSpins ? Object.entries(variantSpins)
                             .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
