@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="#8B0000"/>
+  
+  <!-- Turban/Head -->
+  <path d="M 30 40 Q 25 30 30 25 Q 35 20 50 20 Q 65 20 70 25 Q 75 30 70 40" fill="#4B0082" stroke="#2D1B4E" stroke-width="1"/>
+  
+  <!-- Jewel on turban -->
+  <circle cx="50" cy="28" r="4" fill="#1E90FF"/>
+  <circle cx="50" cy="28" r="2" fill="#FFFFFF"/>
+  
+  <!-- Face -->
+  <ellipse cx="50" cy="45" rx="20" ry="18" fill="#D2B48C"/>
+  
+  <!-- Glowing Red Eyes -->
+  <circle cx="43" cy="42" r="4" fill="#FF0000" opacity="0.9">
+    <animate attributeName="opacity" values="0.7;1;0.7" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="57" cy="42" r="4" fill="#FF0000" opacity="0.9">
+    <animate attributeName="opacity" values="0.7;1;0.7" dur="2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="43" cy="42" r="2" fill="#8B0000"/>
+  <circle cx="57" cy="42" r="2" fill="#8B0000"/>
+  
+  <!-- Beard -->
+  <path d="M 35 50 Q 40 60 50 58 Q 60 60 65 50" fill="#654321" stroke="#543210" stroke-width="1"/>
+  
+  <!-- Mouth/Opening -->
+  <rect x="42" y="52" width="16" height="12" fill="#000000" rx="2"/>
+  
+  <!-- Robe collar -->
+  <path d="M 30 65 Q 50 70 70 65" stroke="#DC143C" stroke-width="3" fill="none"/>
+  <path d="M 35 68 Q 50 73 65 68" stroke="#FFD700" stroke-width="1" fill="none"/>
+</svg>
+
