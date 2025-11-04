@@ -648,10 +648,51 @@ async function findMatchesForExcel(artistName) {
     progressEl.textContent = '';
 }
 
+// Calculate date range: previous Thursday to last Thursday (one week)
+function getKexpDateRange() {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    // Get last Thursday (most recent Thursday, including today if it's Thursday)
+    const lastThursday = new Date(today);
+    const dayOfWeek = lastThursday.getDay(); // 0 = Sunday, 4 = Thursday
+    // If today is Thursday (4), we want today. Otherwise, go back to the most recent Thursday
+    let daysToSubtract = 0;
+    if (dayOfWeek < 4) {
+        // Before Thursday: go back to previous week's Thursday
+        daysToSubtract = dayOfWeek + 3; // e.g., Monday (1) -> back 4 days to Thursday
+    } else if (dayOfWeek > 4) {
+        // After Thursday: go back to this week's Thursday
+        daysToSubtract = dayOfWeek - 4; // e.g., Saturday (6) -> back 2 days to Thursday
+    }
+    // If dayOfWeek === 4, it's Thursday, so daysToSubtract = 0 (use today)
+    lastThursday.setDate(today.getDate() - daysToSubtract);
+    
+    // Get previous Thursday (one week before last Thursday)
+    const previousThursday = new Date(lastThursday);
+    previousThursday.setDate(lastThursday.getDate() - 7);
+    
+    // Format as ISO strings for API (YYYY-MM-DD)
+    const formatDate = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+    
+    return {
+        start: formatDate(previousThursday),
+        end: formatDate(lastThursday)
+    };
+}
+
 // Fetch KEXP API data for one or more artists (helper function)
 // Returns array of matches with source: 'kexp' flag
 async function fetchKexpDataForArtists(artistList, progressCallback) {
     const kexpResults = [];
+    
+    // Get date range: previous Thursday to last Thursday
+    const dateRange = getKexpDateRange();
     
     // Cache for show names and DJ info to avoid repeated API calls
     const showCache = {};
@@ -661,11 +702,13 @@ async function fetchKexpDataForArtists(artistList, progressCallback) {
             progressCallback(`Fetching KEXP data for ${artistName}...`);
         }
         
-        // Fetch all pages of results for this artist
+        // Fetch results for this artist within date range
+        // Try with date parameters first, but filter client-side as well in case API doesn't support them
         let nextUrl = `https://api.kexp.org/v2/plays/?artist=${encodeURIComponent(artistName)}&limit=100`;
         let totalFetched = 0;
+        let hasMorePages = true;
         
-        while (nextUrl) {
+        while (hasMorePages && nextUrl) {
             if (progressCallback) {
                 progressCallback(`Fetching KEXP page ${Math.floor(totalFetched / 100) + 1} for ${artistName}... (${totalFetched} plays)`);
             }
@@ -686,6 +729,18 @@ async function fetchKexpDataForArtists(artistList, progressCallback) {
                         continue;
                     }
                     
+                    // Filter by date range (double-check client-side)
+                    if (play.airdate) {
+                        const playDate = new Date(play.airdate);
+                        const startDate = new Date(dateRange.start);
+                        const endDate = new Date(dateRange.end);
+                        endDate.setHours(23, 59, 59, 999); // End of day
+                        
+                        if (playDate < startDate || playDate > endDate) {
+                            continue; // Skip plays outside date range
+                        }
+                    }
+                    
                     // Client-side filtering: only include if artist matches (case-insensitive, fuzzy)
                     const playArtistLower = play.artist.toLowerCase();
                     const searchArtistLower = artistName.toLowerCase();
@@ -699,44 +754,76 @@ async function fetchKexpDataForArtists(artistList, progressCallback) {
                         }
                     }
                     
-                    // Get show name and DJ info (use cache to avoid repeated calls)
-                    let stationName = `KEXP Show ${play.show}`;
+                    // Get DJ name and show name from show API
                     let djName = '';
+                    let stationName = '';
                     
+                    // Fetch show details if not cached
                     if (play.show_uri && !showCache[play.show]) {
                         try {
                             const showResponse = await fetch(play.show_uri);
                             if (showResponse.ok) {
                                 const showData = await showResponse.json();
+                                
+                                // Get show/program name
                                 if (showData.program && showData.program.name) {
                                     stationName = showData.program.name;
                                 } else if (showData.program_name) {
                                     stationName = showData.program_name;
+                                } else if (showData.name) {
+                                    stationName = showData.name;
                                 }
                                 
-                                // Try to get DJ/host name
-                                if (showData.hosts && showData.hosts.length > 0) {
-                                    djName = showData.hosts.map(h => h.name || h).join(', ');
+                                // Get DJ/host name - try multiple possible fields
+                                if (showData.hosts && Array.isArray(showData.hosts) && showData.hosts.length > 0) {
+                                    djName = showData.hosts.map(h => {
+                                        if (typeof h === 'string') return h;
+                                        if (h && typeof h === 'object') return h.name || h.display_name || JSON.stringify(h);
+                                        return '';
+                                    }).filter(h => h).join(', ');
                                 } else if (showData.host) {
-                                    djName = showData.host;
+                                    if (typeof showData.host === 'string') {
+                                        djName = showData.host;
+                                    } else if (showData.host && typeof showData.host === 'object') {
+                                        djName = showData.host.name || showData.host.display_name || JSON.stringify(showData.host);
+                                    }
                                 } else if (showData.dj) {
-                                    djName = showData.dj;
+                                    if (typeof showData.dj === 'string') {
+                                        djName = showData.dj;
+                                    } else if (showData.dj && typeof showData.dj === 'object') {
+                                        djName = showData.dj.name || showData.dj.display_name || JSON.stringify(showData.dj);
+                                    }
+                                } else if (showData.dj_name) {
+                                    djName = showData.dj_name;
                                 }
                                 
                                 showCache[play.show] = { name: stationName, dj: djName };
                             }
                         } catch (err) {
                             console.warn(`Failed to fetch show ${play.show}:`, err);
+                            showCache[play.show] = { name: '', dj: '' }; // Cache empty to avoid repeated calls
                         }
                     } else if (showCache[play.show]) {
                         stationName = showCache[play.show].name;
                         djName = showCache[play.show].dj;
                     }
                     
-                    // Format station name with DJ in brackets if available
-                    let finalStationName = stationName;
+                    // Format station name - prioritize DJ name in brackets
+                    let finalStationName = '';
                     if (djName) {
-                        finalStationName = `${stationName} [${djName}]`;
+                        // If we have both show name and DJ, show both
+                        if (stationName) {
+                            finalStationName = `${stationName} [${djName}]`;
+                        } else {
+                            // If only DJ name, just show it in brackets
+                            finalStationName = `[${djName}]`;
+                        }
+                    } else if (stationName) {
+                        // If only show name, use that
+                        finalStationName = stationName;
+                    } else {
+                        // Fallback to show ID
+                        finalStationName = `KEXP Show ${play.show}`;
                     }
                     
                     // Check if song is in tracklist database (if available)
@@ -772,10 +859,36 @@ async function fetchKexpDataForArtists(artistList, progressCallback) {
                 }
                 
                 totalFetched += data.results.length;
-                nextUrl = data.next; // Follow pagination
+                
+                // Check if we've gone outside our date range (API returns most recent first)
+                // If all results in this page are before our start date, stop paginating
+                let allBeforeStartDate = true;
+                for (const play of data.results) {
+                    if (play.airdate) {
+                        const playDate = new Date(play.airdate);
+                        const startDate = new Date(dateRange.start);
+                        if (playDate >= startDate) {
+                            allBeforeStartDate = false;
+                            break;
+                        }
+                    }
+                }
+                
+                // If all results are before our date range, stop paginating
+                if (allBeforeStartDate && data.results.length > 0) {
+                    hasMorePages = false;
+                    break;
+                }
+                
+                // Check if there are more pages
+                if (data.next && data.results.length > 0 && !allBeforeStartDate) {
+                    nextUrl = data.next;
+                } else {
+                    hasMorePages = false;
+                }
                 
                 // Small delay to avoid rate limiting
-                if (nextUrl) {
+                if (nextUrl && hasMorePages) {
                     await new Promise(r => setTimeout(r, 100));
                 }
             } catch (error) {
@@ -2127,36 +2240,41 @@ async function findMatches() {
     // Sort matches by artist order (as entered) then by song title
     const sortedMatches = sortMatchesByArtistOrder(matches, artistList);
     
-    // Automatically fetch KEXP data for the same artists
-    progressEl.textContent = 'Fetching KEXP data...';
-    try {
-        const kexpResults = await fetchKexpDataForArtists(artistList, (msg) => {
-            progressEl.textContent = msg;
-        });
-        
-        // Merge KEXP results with Online Radio Box matches
-        matches = [...sortedMatches, ...kexpResults];
-        
-        // Re-sort combined results
-        matches = sortMatchesByArtistOrder(matches, artistList);
-    } catch (error) {
-        console.error('Error fetching KEXP data:', error);
-        // Continue with just Online Radio Box matches if KEXP fails
-        matches = sortedMatches;
-    }
-    
+    // Display ORB results immediately
+    matches = sortedMatches;
     downloadBtn.disabled = matches.length === 0;
     findBtn.disabled = false;
     findBtn.innerHTML = 'Find Matches';
     findBtn.classList.remove('loading');
     progressEl.textContent = '';
     const summaryEl = document.getElementById('summary');
-    const kexpCount = matches.filter(m => m.source === 'kexp').length;
-    const orbCount = matches.length - kexpCount;
-    summaryEl.textContent = `${orbCount} Online Radio Box matches across ${summary.sheetsScanned} sheets (${summary.rowsScanned} rows scanned). ${kexpCount > 0 ? `${kexpCount} KEXP matches.` : ''}`;
+    summaryEl.textContent = `${matches.length} Online Radio Box matches across ${summary.sheetsScanned} sheets (${summary.rowsScanned} rows scanned). Fetching KEXP data...`;
     
-    // Display results in current format
+    // Display results in current format immediately
     displayResults(matches);
+    
+    // Fetch KEXP data in background and add to results when done
+    fetchKexpDataForArtists(artistList, (msg) => {
+        // Update progress in summary
+        summaryEl.textContent = `${matches.length} Online Radio Box matches across ${summary.sheetsScanned} sheets (${summary.rowsScanned} rows scanned). ${msg}`;
+    }).then(kexpResults => {
+        // Merge KEXP results with Online Radio Box matches
+        matches = [...matches, ...kexpResults];
+        
+        // Re-sort combined results
+        matches = sortMatchesByArtistOrder(matches, artistList);
+        
+        // Update display with merged results
+        displayResults(matches);
+        
+        // Update summary
+        const kexpCount = kexpResults.length;
+        const orbCount = matches.length - kexpCount;
+        summaryEl.textContent = `${orbCount} Online Radio Box matches across ${summary.sheetsScanned} sheets (${summary.rowsScanned} rows scanned). ${kexpCount > 0 ? `${kexpCount} KEXP matches.` : 'No KEXP matches found.'}`;
+    }).catch(error => {
+        console.error('Error fetching KEXP data:', error);
+        summaryEl.textContent = `${matches.length} Online Radio Box matches across ${summary.sheetsScanned} sheets (${summary.rowsScanned} rows scanned). KEXP fetch failed.`;
+    });
 }
 
 // Try multiple columns and strategies to extract artist/song
@@ -2277,8 +2395,8 @@ function displayTableFormat(matches) {
         // Highlight KEXP results in green
         if (match.source === 'kexp') {
             row.style.backgroundColor = '#e6f7e6'; // Light green background
-        }
-        
+}
+
         // Check if this track is a variant (case-insensitive matching)
         const matchArtistLower = match.artist.toLowerCase();
         const normalizedMatchSong = normalizeText(match.song);
