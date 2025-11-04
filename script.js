@@ -1288,6 +1288,20 @@ async function fetchWfmuDataForArtists(artistList, progressCallback) {
 function processWfmuHtml(html, artistName, dateRange) {
     const results = [];
     
+    // Check if the search was blocked or returned an error
+    if (html.includes('Sorry, you cannot run searches at this time') || 
+        html.includes('cannot run searches') ||
+        html.includes('search is currently unavailable')) {
+        console.warn(`[WFMU Debug] Search blocked - WFMU is not allowing searches at this time`);
+        return results; // Return empty results
+    }
+    
+    // Check if there are actually results
+    if (html.includes('No results found') || html.includes('no matches')) {
+        console.log(`[WFMU Debug] No results found for ${artistName}`);
+        return results;
+    }
+    
     // Create a temporary DOM element to parse HTML
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
