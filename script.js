@@ -5,6 +5,7 @@ let matches = []; // { station, artist, song }
 let spinitronMatches = []; // Spinitron data matches
 let onlineradioboxMatches = []; // Online Radio Box data matches
 let kexpMatches = []; // KEXP API data matches
+let nprMatches = []; // NPR API data matches (supports multiple stations like KCRW, WNYC, etc.)
 let tracklistDatabase = {}; // { artistName: [song1, song2, ...] }
 let trackVariants = {}; // { "artist|variantSong": "parentSong" } - maps variant tracks to their parent
 let currentResultFormat = 'table'; // Current display format
@@ -951,6 +952,537 @@ async function fetchKexpDataForArtists(artistList, progressCallback) {
     return kexpResults;
 }
 
+// Fetch NPR API data for one or more artists (helper function)
+// Returns array of matches with source: 'npr' flag and station name
+// stationId: NPR station ID (e.g., 'KCRW', 'WNYC', 'WBEZ')
+async function fetchNprDataForArtists(artistList, stationId, apiKey, progressCallback) {
+    const nprResults = [];
+    
+    // Get date range: last last Thursday to current previous Thursday (same as KEXP)
+    const dateRange = getKexpDateRange();
+    
+    // Cache for show names and DJ info to avoid repeated API calls
+    const showCache = {};
+    
+    // Default to KCRW if no station specified
+    const station = stationId || 'KCRW';
+    
+    for (const artistName of artistList) {
+        if (progressCallback) {
+            progressCallback(`Fetching ${station} data for ${artistName}...`);
+        }
+        
+        try {
+            // Try different endpoint variations to find the right one
+            // Base URL: https://api.composer.nprstations.org/v1/stations/{STATION_ID}/playlists
+            let baseUrl = `https://api.composer.nprstations.org/v1/stations/${station}`;
+            
+            // Try playlists endpoint first
+            let url = `${baseUrl}/playlists`;
+            const params = new URLSearchParams();
+            
+            // Add date range if API supports it
+            params.append('startDate', dateRange.start);
+            params.append('endDate', dateRange.end);
+            
+            // Add artist search if API supports it
+            params.append('artist', artistName);
+            
+            // Add API key if provided
+            if (apiKey) {
+                params.append('apiKey', apiKey);
+            }
+            
+            url += '?' + params.toString();
+            
+            if (progressCallback) {
+                progressCallback(`Fetching ${station} playlist data for ${artistName}...`);
+            }
+            
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                // Try alternative endpoint structure
+                if (response.status === 404) {
+                    // Try /plays endpoint instead
+                    url = `${baseUrl}/plays?${params.toString()}`;
+                    const altResponse = await fetch(url);
+                    if (altResponse.ok) {
+                        const data = await altResponse.json();
+                        nprResults.push(...processNprResponse(data, artistName, station, dateRange, showCache));
+                        continue;
+                    }
+                }
+                console.warn(`${station} API error for ${artistName}: ${response.status}`);
+                if (progressCallback) {
+                    progressCallback(`${station} API returned ${response.status}. Check API key or endpoint.`);
+                }
+                continue;
+            }
+            
+            const data = await response.json();
+            
+            // Log first response to debug structure
+            if (nprResults.length === 0) {
+                console.log(`[NPR API Debug] ${station} API Response sample:`, data);
+                console.log(`[NPR API Debug] URL used: ${url}`);
+                console.log(`[NPR API Debug] Date range: ${dateRange.start} to ${dateRange.end}`);
+            }
+            
+            const processed = processNprResponse(data, artistName, station, dateRange, showCache);
+            console.log(`[NPR API Debug] Processed ${processed.length} plays for ${artistName} from ${station}`);
+            nprResults.push(...processed);
+            
+        } catch (error) {
+            console.error(`Error fetching ${station} data for ${artistName}:`, error);
+            if (progressCallback) {
+                progressCallback(`Error: ${error.message}`);
+            }
+        }
+    }
+    
+    return nprResults;
+}
+
+// Process NPR API response and extract playlist data
+function processNprResponse(data, artistName, stationName, dateRange, showCache) {
+    const results = [];
+    
+    // Handle different possible response structures
+    let plays = [];
+    
+    if (Array.isArray(data)) {
+        plays = data;
+        console.log(`[NPR API Debug] Response is array, found ${plays.length} items`);
+    } else if (data.plays && Array.isArray(data.plays)) {
+        plays = data.plays;
+        console.log(`[NPR API Debug] Found plays array with ${plays.length} items`);
+    } else if (data.playlist && Array.isArray(data.playlist)) {
+        plays = data.playlist;
+        console.log(`[NPR API Debug] Found playlist array with ${plays.length} items`);
+    } else if (data.items && Array.isArray(data.items)) {
+        plays = data.items;
+        console.log(`[NPR API Debug] Found items array with ${plays.length} items`);
+    } else if (data.results && Array.isArray(data.results)) {
+        plays = data.results;
+        console.log(`[NPR API Debug] Found results array with ${plays.length} items`);
+    } else if (data.data && Array.isArray(data.data)) {
+        plays = data.data;
+        console.log(`[NPR API Debug] Found data array with ${plays.length} items`);
+    } else {
+        console.warn(`[NPR API Debug] Unknown response structure for ${stationName}:`, Object.keys(data));
+        console.log(`[NPR API Debug] Full response:`, data);
+    }
+    
+    // Process each play
+    for (const play of plays) {
+        // Extract artist and song - try different field names
+        let artist = play.artist || play.artistName || play.artist_name || play.performer || '';
+        let song = play.song || play.songTitle || play.song_title || play.title || play.track || '';
+        
+        if (!artist || !song) {
+            // Log first few plays to debug structure
+            if (results.length === 0 && plays.indexOf(play) < 3) {
+                console.log(`[NPR API Debug] Play object structure (missing artist/song):`, Object.keys(play));
+                console.log(`[NPR API Debug] Sample play:`, play);
+            }
+            continue;
+        }
+        
+        // Filter by artist (case-insensitive, fuzzy)
+        const playArtistLower = artist.toLowerCase();
+        const searchArtistLower = artistName.toLowerCase();
+        if (!playArtistLower.includes(searchArtistLower) && 
+            similarityRatio(playArtistLower, searchArtistLower) < FUZZY_THRESHOLD) {
+            const normalizedPlayArtist = normalizeText(artist);
+            const normalizedSearchArtist = normalizeText(artistName);
+            if (similarityRatio(normalizedPlayArtist, normalizedSearchArtist) < FUZZY_THRESHOLD) {
+                continue;
+            }
+        }
+        
+        // Extract date and filter by date range
+        let playDate = null;
+        const dateField = play.date || play.airdate || play.airDate || play.air_time || play.playedAt || play.played_at;
+        if (dateField) {
+            playDate = new Date(dateField);
+            const startDate = new Date(dateRange.start);
+            const endDate = new Date(dateRange.end);
+            endDate.setHours(23, 59, 59, 999);
+            
+            if (playDate < startDate || playDate > endDate) {
+                continue;
+            }
+        }
+        
+        // Get show/DJ name
+        let showName = stationName; // Use the station ID as default
+        let djName = '';
+        
+        const showField = play.show || play.program || play.showName || play.show_name;
+        if (showField) {
+            if (typeof showField === 'string') {
+                showName = showField;
+            } else if (showField && typeof showField === 'object') {
+                showName = showField.name || showField.title || stationName;
+                djName = showField.host || showField.hostName || showField.host_name || showField.dj || '';
+            }
+        }
+        
+        // Try to get DJ from play object directly
+        if (!djName) {
+            djName = play.host || play.hostName || play.host_name || play.dj || play.djName || play.dj_name || '';
+        }
+        
+        // Format station name with DJ in brackets if available
+        let finalStationName = stationName;
+        if (djName) {
+            finalStationName = `${stationName} [${djName}]`;
+        } else if (showName !== stationName) {
+            finalStationName = `${stationName} (${showName})`;
+        } else {
+            finalStationName = stationName;
+        }
+        
+        // Check if song is in tracklist database
+        const hasTracklist = Object.keys(tracklistDatabase).length > 0;
+        if (hasTracklist) {
+            const tlMatch = matchTracklistFuzzy(artist, song);
+            if (tlMatch.ok) {
+                results.push({
+                    station: finalStationName,
+                    artist: tlMatch.artist,
+                    song: tlMatch.song,
+                    source: 'npr'
+                });
+            } else {
+                results.push({
+                    station: finalStationName,
+                    artist: artist,
+                    song: song,
+                    source: 'npr'
+                });
+            }
+        } else {
+            results.push({
+                station: finalStationName,
+                artist: artist,
+                song: song,
+                source: 'npr'
+            });
+        }
+    }
+    
+    return results;
+}
+
+// Fetch NPR API data for an artist (UI function)
+async function fetchNprData() {
+    const artistInput = document.getElementById('nprArtistInput');
+    const apiKeyInput = document.getElementById('nprApiKey');
+    const stationInput = document.getElementById('nprStationId');
+    const progressEl = document.getElementById('nprProgress');
+    
+    if (!artistInput || !artistInput.value.trim()) {
+        alert('Please enter an artist name.');
+        return;
+    }
+    
+    const artistName = artistInput.value.trim();
+    const apiKey = apiKeyInput ? apiKeyInput.value.trim() : '';
+    const stationId = stationInput ? stationInput.value.trim() || 'KCRW' : 'KCRW';
+    
+    // Clear previous NPR data
+    nprMatches = [];
+    
+    // Clear previous display
+    const resultsDisplay = document.getElementById('resultsDisplay');
+    if (resultsDisplay) {
+        resultsDisplay.style.display = 'none';
+    }
+    
+    progressEl.textContent = `Fetching data from ${stationId} API...`;
+    
+    try {
+        const results = await fetchNprDataForArtists([artistName], stationId, apiKey, (msg) => {
+            progressEl.textContent = msg;
+        });
+        
+        nprMatches = results;
+        
+        progressEl.textContent = `Found ${nprMatches.length} plays from ${stationId} API`;
+        
+        if (nprMatches.length === 0) {
+            alert(`No plays found for "${artistName}" on ${stationId}. Check API key or try different endpoint.`);
+            return;
+        }
+        
+        // Display results in the same format as other data sources
+        displayNprResults();
+        
+    } catch (error) {
+        console.error(`Error fetching ${stationId} data:`, error);
+        progressEl.textContent = '';
+        alert(`Error fetching ${stationId} data: ${error.message}`);
+    }
+}
+
+// Display NPR results
+function displayNprResults() {
+    const resultsDisplay = document.getElementById('resultsDisplay');
+    if (!resultsDisplay) return;
+    
+    // Get station name from first match if available
+    const stationName = nprMatches.length > 0 ? nprMatches[0].station.split(' ')[0] : 'NPR';
+    
+    resultsDisplay.innerHTML = `
+        <div class="results-header">
+            <h3>${stationName} API Results</h3>
+            <div class="format-toggles">
+                <button class="format-btn active" onclick="setNprResultFormat('table')" id="nprTableFormatBtn">Table View</button>
+                <button class="format-btn" onclick="setNprResultFormat('station')" id="nprStationFormatBtn">Station Format</button>
+                <button class="format-btn" onclick="setNprResultFormat('spingrid')" id="nprSpingridFormatBtn">Spingrid</button>
+            </div>
+        </div>
+        
+        <!-- Table Format -->
+        <div id="nprTableFormat" class="result-format">
+            <div class="results-table-container">
+                <table id="nprResultsTable" class="results-table">
+                    <thead>
+                        <tr>
+                            <th>station</th>
+                            <th>artist</th>
+                            <th>song</th>
+                            <th>actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="nprResultsTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Station Format -->
+        <div id="nprStationFormat" class="result-format" style="display: none;">
+            <div class="results-text-container">
+                <div id="nprStationResultsBody"></div>
+            </div>
+        </div>
+        
+        <!-- Spingrid Format -->
+        <div id="nprSpingridFormat" class="result-format" style="display: none;">
+            <div class="format-actions">
+                <button class="download-btn" onclick="copyNprSpingridForExcel()">copy for excel</button>
+            </div>
+            <div class="results-text-container">
+                <div id="nprSpingridResultsBody"></div>
+            </div>
+        </div>
+    `;
+    
+    // Show in table format initially
+    setNprResultFormat('table');
+}
+
+// Set NPR result format and update display
+function setNprResultFormat(format) {
+    // Update button states
+    document.querySelectorAll('#nprTableFormatBtn, #nprStationFormatBtn, #nprSpingridFormatBtn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`npr${format.charAt(0).toUpperCase() + format.slice(1)}FormatBtn`).classList.add('active');
+    
+    // Hide all formats
+    document.getElementById('nprTableFormat').style.display = 'none';
+    document.getElementById('nprStationFormat').style.display = 'none';
+    document.getElementById('nprSpingridFormat').style.display = 'none';
+    
+    // Show selected format
+    document.getElementById(`npr${format.charAt(0).toUpperCase() + format.slice(1)}Format`).style.display = 'block';
+    
+    // Display in selected format
+    switch (format) {
+        case 'table':
+            displayNprTableFormat();
+            break;
+        case 'station':
+            displayNprStationFormat();
+            break;
+        case 'spingrid':
+            displayNprSpingridFormat();
+            break;
+    }
+    
+    // Show results display
+    const resultsDisplay = document.getElementById('resultsDisplay');
+    if (resultsDisplay) {
+        resultsDisplay.style.display = 'block';
+    }
+}
+
+// Display NPR results in table format
+function displayNprTableFormat() {
+    const tableBody = document.getElementById('nprResultsTableBody');
+    if (!tableBody) return;
+    
+    tableBody.innerHTML = '';
+    
+    nprMatches.forEach((match, index) => {
+        const row = document.createElement('tr');
+        
+        // Highlight all NPR results in blue (different from KEXP's green)
+        row.style.backgroundColor = '#e6f0ff'; // Light blue background
+        
+        // Check if this track is a variant (case-insensitive matching)
+        const matchArtistLower = match.artist.toLowerCase();
+        const normalizedMatchSong = normalizeText(match.song);
+        let variantParent = null;
+        for (const [key, parent] of Object.entries(trackVariants)) {
+            const [variantArtist, variantSong] = key.split('|');
+            const normalizedVariantSong = normalizeText(variantSong);
+            if (variantArtist.toLowerCase() === matchArtistLower && normalizedVariantSong === normalizedMatchSong) {
+                variantParent = parent;
+                break;
+            }
+        }
+        const variantIndicator = variantParent ? ` <span style="color: #718096; font-size: 0.85em;">(variant of ${escapeHtml(variantParent)})</span>` : '';
+        
+        // Check if this track is in the tracklist database
+        const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
+            artist.toLowerCase() === match.artist.toLowerCase()
+        );
+        const isInTracklist = tracklistArtist && tracklistDatabase[tracklistArtist] && 
+            isSongInTracklistFuzzy(tracklistArtist, match.song);
+        
+        // Only show "make variant" button if track is NOT in tracklist database
+        let actionContent = '';
+        if (isInTracklist) {
+            if (variantParent) {
+                actionContent = `<span style="color: #718096; font-size: 0.85em;">in tracklist • variant of ${escapeHtml(variantParent)}</span>`;
+            } else {
+                actionContent = '<span style="color: #718096; font-size: 0.85em;">in tracklist</span>';
+            }
+        } else {
+            actionContent = `
+                <button class="variant-btn" onclick="openVariantModal('${escapeHtml(match.artist)}', '${escapeHtml(match.song)}')" title="Make this track a variant of another track">
+                    make variant
+                </button>
+            `;
+        }
+        
+        row.innerHTML = `
+            <td>${escapeHtml(match.station)}</td>
+            <td>${escapeHtml(match.artist)}</td>
+            <td>${escapeHtml(match.song)}${variantIndicator}</td>
+            <td>${actionContent}</td>
+        `;
+        tableBody.appendChild(row);
+    });
+}
+
+// Display NPR results in station format
+function displayNprStationFormat() {
+    const stationResultsBody = document.getElementById('nprStationResultsBody');
+    if (!stationResultsBody) return;
+    
+    // Group by artist first, then by station and song
+    const artistGroups = {};
+    nprMatches.forEach(match => {
+        if (!artistGroups[match.artist]) {
+            artistGroups[match.artist] = {};
+        }
+        if (!artistGroups[match.artist][match.station]) {
+            artistGroups[match.artist][match.station] = {};
+        }
+        if (!artistGroups[match.artist][match.station][match.song]) {
+            artistGroups[match.artist][match.station][match.song] = 0;
+        }
+        artistGroups[match.artist][match.station][match.song]++;
+    });
+    
+    let html = '';
+    Object.keys(artistGroups).sort().forEach(artistName => {
+        html += `<div class="artist-section">`;
+        html += `<div class="artist-header">${escapeHtml(artistName)}</div>`;
+        
+        const stations = artistGroups[artistName];
+        Object.keys(stations).sort().forEach(stationName => {
+            const songs = stations[stationName];
+            const songEntries = Object.entries(songs).map(([songName, count]) => {
+                return count > 1 ? `"${escapeHtml(songName)}" (${count})` : `"${escapeHtml(songName)}"`;
+            });
+            
+            html += `<div class="station-entry">${escapeHtml(stationName)} Spun - ${songEntries.join(', ')}</div>`;
+        });
+        
+        html += `</div>`;
+    });
+    
+    stationResultsBody.innerHTML = html;
+}
+
+// Display NPR results in spingrid format
+function displayNprSpingridFormat() {
+    const spingridResultsBody = document.getElementById('nprSpingridResultsBody');
+    if (!spingridResultsBody) return;
+    
+    // Get the artist from NPR matches
+    const artistList = nprMatches.length > 0 ? [nprMatches[0].artist] : [];
+    
+    if (artistList.length === 0) {
+        spingridResultsBody.innerHTML = '<p style="text-align: center; color: #718096;">No artists found.</p>';
+        return;
+    }
+    
+    // Temporarily set artist input so displaySpingridFormat can read it
+    const artistInput = document.getElementById('artistNames');
+    const originalArtistValue = artistInput ? artistInput.value : '';
+    
+    if (artistInput) {
+        artistInput.value = artistList.join(', ');
+    }
+    
+    try {
+        // Use the existing displaySpingridFormat function with NPR matches
+        displaySpingridFormat(nprMatches, 'nprSpingridResultsBody');
+    } finally {
+        // Restore original artist value
+        if (artistInput) {
+            artistInput.value = originalArtistValue;
+        }
+    }
+}
+
+// Copy NPR spingrid for Excel
+function copyNprSpingridForExcel() {
+    // Get the artist from NPR matches
+    const artistList = nprMatches.length > 0 ? [nprMatches[0].artist] : [];
+    
+    if (artistList.length === 0) {
+        alert('No NPR data to copy.');
+        return;
+    }
+    
+    // Temporarily set artist input and matches, then call the function
+    const artistInput = document.getElementById('artistNames');
+    const originalArtistValue = artistInput ? artistInput.value : '';
+    const originalMatches = matches;
+    
+    if (artistInput) {
+        artistInput.value = artistList.join(', ');
+    }
+    matches = nprMatches;
+    
+    try {
+        copySpingridForExcel();
+    } finally {
+        // Restore original values
+        if (artistInput) {
+            artistInput.value = originalArtistValue;
+        }
+        matches = originalMatches;
+    }
+}
+
 // Fetch KEXP API data for an artist (UI function)
 async function fetchKexpData() {
     const artistInput = document.getElementById('kexpArtistInput');
@@ -1309,29 +1841,37 @@ function displaySpingridFormat(matches, containerId) {
     // Group matches by artist and song for spin counts
     const spinCounts = {};
     const kexpStationInfo = {}; // Track KEXP stations: { artist: { song: [{ station, count }] } }
+    const nprStationInfo = {}; // Track NPR stations: { artist: { song: [{ station, count }] } }
     
     matches.forEach(match => {
         if (!spinCounts[match.artist]) {
             spinCounts[match.artist] = {};
             kexpStationInfo[match.artist] = {};
+            nprStationInfo[match.artist] = {};
         }
         if (!spinCounts[match.artist][match.song]) {
             spinCounts[match.artist][match.song] = {};
             kexpStationInfo[match.artist][match.song] = [];
+            nprStationInfo[match.artist][match.song] = [];
         }
         
-        // Track KEXP matches separately for special formatting
+        // Track KEXP and KCRW matches separately for special formatting
         if (match.source === 'kexp') {
             kexpStationInfo[match.artist][match.song].push({
                 station: match.station,
                 count: 1
             });
+        } else if (match.source === 'npr') {
+            nprStationInfo[match.artist][match.song].push({
+                station: match.station,
+                count: 1
+            });
         } else {
-            // Non-KEXP stations use normal counting
-            if (!spinCounts[match.artist][match.song][match.station]) {
-                spinCounts[match.artist][match.song][match.station] = 0;
-            }
-            spinCounts[match.artist][match.song][match.station]++;
+            // Non-KEXP/NPR stations use normal counting
+        if (!spinCounts[match.artist][match.song][match.station]) {
+            spinCounts[match.artist][match.song][match.station] = 0;
+        }
+        spinCounts[match.artist][match.song][match.station]++;
         }
     });
     
@@ -1368,6 +1908,52 @@ function displaySpingridFormat(matches, containerId) {
                     spinCounts[artist][song] = {};
                 }
                 spinCounts[artist][song][kexpStationName] = totalKexpCount;
+            }
+        });
+    });
+    
+    // Aggregate NPR stations and format them as "{STATION_ID} (count) [DJ1][DJ2]"
+    Object.keys(nprStationInfo).forEach(artist => {
+        Object.keys(nprStationInfo[artist]).forEach(song => {
+            const nprStations = nprStationInfo[artist][song];
+            if (nprStations.length > 0) {
+                // Aggregate NPR stations: extract DJ names and count total
+                // Also extract station ID from the station name
+                const djNamesSet = new Set();
+                const stationIdsSet = new Set();
+                let totalNprCount = 0;
+                
+                nprStations.forEach(({ station, count }) => {
+                    totalNprCount += count;
+                    // Extract station ID (first word before space or bracket)
+                    const stationIdMatch = station.match(/^([A-Z0-9]+)/);
+                    if (stationIdMatch) {
+                        stationIdsSet.add(stationIdMatch[1]);
+                    }
+                    // Extract DJ names from brackets: "[DJ Name]" or "Show Name [DJ Name]"
+                    const bracketMatches = station.match(/\[([^\]]+)\]/g);
+                    if (bracketMatches) {
+                        bracketMatches.forEach(bracket => {
+                            // Remove brackets and add DJ name
+                            const djName = bracket.replace(/[\[\]]/g, '');
+                            if (djName) {
+                                djNamesSet.add(djName);
+                            }
+                        });
+                    }
+                });
+                
+                // Format as "{STATION_ID} (count) [DJ1][DJ2][DJ3]"
+                // Use the first station ID found, or default to "NPR"
+                const stationId = Array.from(stationIdsSet)[0] || 'NPR';
+                const djNames = Array.from(djNamesSet).sort();
+                const nprStationName = `${stationId} (${totalNprCount}) ${djNames.map(dj => `[${dj}]`).join('')}`;
+                
+                // Add to spinCounts
+                if (!spinCounts[artist][song]) {
+                    spinCounts[artist][song] = {};
+                }
+                spinCounts[artist][song][nprStationName] = totalNprCount;
             }
         });
     });
@@ -1600,12 +2186,14 @@ function displaySpingridFormatInContainer(matches, container) {
     const spinCounts = {};
     const songNameMap = {}; // Maps normalized key -> original song name (for display)
     const kexpStationInfo = {}; // Track KEXP stations: { artist: { normalizedSong: [{ station, count }] } }
+    const nprStationInfo = {}; // Track NPR stations: { artist: { normalizedSong: [{ station, count }] } }
     
     matches.forEach(match => {
         if (!spinCounts[match.artist]) {
             spinCounts[match.artist] = {};
             songNameMap[match.artist] = {};
             kexpStationInfo[match.artist] = {};
+            nprStationInfo[match.artist] = {};
         }
         
         // Normalize song name for grouping (case-insensitive)
@@ -1617,19 +2205,25 @@ function displaySpingridFormatInContainer(matches, container) {
             spinCounts[match.artist][normalizedSong] = {};
             songNameMap[match.artist][normalizedSong] = match.song;
             kexpStationInfo[match.artist][normalizedSong] = [];
+            nprStationInfo[match.artist][normalizedSong] = [];
         }
         
-        // Track KEXP matches separately for special formatting
+        // Track KEXP and KCRW matches separately for special formatting
         if (match.source === 'kexp') {
             kexpStationInfo[match.artist][normalizedSong].push({
                 station: match.station,
                 count: 1
             });
+        } else if (match.source === 'npr') {
+            nprStationInfo[match.artist][normalizedSong].push({
+                station: match.station,
+                count: 1
+            });
         } else {
-            // Non-KEXP stations use normal counting
+            // Non-KEXP/NPR stations use normal counting
             if (!spinCounts[match.artist][normalizedSong][match.station]) {
                 spinCounts[match.artist][normalizedSong][match.station] = 0;
-            }
+        }
             spinCounts[match.artist][normalizedSong][match.station]++;
         }
     });
@@ -1667,6 +2261,43 @@ function displaySpingridFormatInContainer(matches, container) {
                     spinCounts[artist][normalizedSong] = {};
                 }
                 spinCounts[artist][normalizedSong][kexpStationName] = totalKexpCount;
+            }
+        });
+    });
+    
+    // Aggregate KCRW stations and format them as "KCRW (count) [DJ1][DJ2]"
+    Object.keys(kcrwStationInfo).forEach(artist => {
+        Object.keys(kcrwStationInfo[artist]).forEach(normalizedSong => {
+            const kcrwStations = kcrwStationInfo[artist][normalizedSong];
+            if (kcrwStations.length > 0) {
+                // Aggregate KCRW stations: extract DJ names and count total
+                const djNamesSet = new Set();
+                let totalKcrwCount = 0;
+                
+                kcrwStations.forEach(({ station, count }) => {
+                    totalKcrwCount += count;
+                    // Extract DJ names from brackets: "[DJ Name]" or "Show Name [DJ Name]"
+                    const bracketMatches = station.match(/\[([^\]]+)\]/g);
+                    if (bracketMatches) {
+                        bracketMatches.forEach(bracket => {
+                            // Remove brackets and add DJ name
+                            const djName = bracket.replace(/[\[\]]/g, '');
+                            if (djName) {
+                                djNamesSet.add(djName);
+                            }
+                        });
+                    }
+                });
+                
+                // Format as "KCRW (count) [DJ1][DJ2][DJ3]"
+                const djNames = Array.from(djNamesSet).sort();
+                const kcrwStationName = `KCRW (${totalKcrwCount}) ${djNames.map(dj => `[${dj}]`).join('')}`;
+                
+                // Add to spinCounts
+                if (!spinCounts[artist][normalizedSong]) {
+                    spinCounts[artist][normalizedSong] = {};
+                }
+                spinCounts[artist][normalizedSong][kcrwStationName] = totalKcrwCount;
             }
         });
     });
@@ -2403,13 +3034,26 @@ async function findMatches() {
     // Display results in current format immediately
     displayResults(matches);
     
-    // Fetch KEXP data in background and add to results when done
-    fetchKexpDataForArtists(artistList, (msg) => {
-        // Update progress in summary
-        summaryEl.textContent = `${matches.length} Online Radio Box matches across ${summary.sheetsScanned} sheets (${summary.rowsScanned} rows scanned). ${msg}`;
-    }).then(kexpResults => {
-        // Merge KEXP results with Online Radio Box matches
-        matches = [...matches, ...kexpResults];
+    // Fetch KEXP and KCRW data in background and add to results when done
+    Promise.all([
+        fetchKexpDataForArtists(artistList, (msg) => {
+            // Update progress in summary
+            summaryEl.textContent = `${matches.length} Online Radio Box matches across ${summary.sheetsScanned} sheets (${summary.rowsScanned} rows scanned). Fetching KEXP... ${msg}`;
+        }).catch(error => {
+            console.error('Error fetching KEXP data:', error);
+            return [];
+        }),
+        // Try to fetch NPR data (optional - may not have API key, defaults to KCRW)
+        fetchNprDataForArtists(artistList, 'KCRW', '', (msg) => {
+            // Silently fetch NPR in background
+            console.log(`[NPR API Debug] ${msg}`);
+        }).catch(error => {
+            console.error('[NPR API Debug] Error fetching NPR data:', error);
+            return [];
+        })
+    ]).then(([kexpResults, nprResults]) => {
+        // Merge KEXP and NPR results with Online Radio Box matches
+        matches = [...matches, ...kexpResults, ...nprResults];
         
         // Re-sort combined results
         matches = sortMatchesByArtistOrder(matches, artistList);
@@ -2419,11 +3063,16 @@ async function findMatches() {
         
         // Update summary
         const kexpCount = kexpResults.length;
-        const orbCount = matches.length - kexpCount;
-        summaryEl.textContent = `${orbCount} Online Radio Box matches across ${summary.sheetsScanned} sheets (${summary.rowsScanned} rows scanned). ${kexpCount > 0 ? `${kexpCount} KEXP matches.` : 'No KEXP matches found.'}`;
+        const nprCount = nprResults.length;
+        const orbCount = matches.length - kexpCount - nprCount;
+        let summaryText = `${orbCount} Online Radio Box matches across ${summary.sheetsScanned} sheets (${summary.rowsScanned} rows scanned).`;
+        if (kexpCount > 0) summaryText += ` ${kexpCount} KEXP matches.`;
+        if (nprCount > 0) summaryText += ` ${nprCount} NPR matches.`;
+        if (kexpCount === 0 && nprCount === 0) summaryText += ' No KEXP or NPR matches found.';
+        summaryEl.textContent = summaryText;
     }).catch(error => {
-        console.error('Error fetching KEXP data:', error);
-        summaryEl.textContent = `${matches.length} Online Radio Box matches across ${summary.sheetsScanned} sheets (${summary.rowsScanned} rows scanned). KEXP fetch failed.`;
+        console.error('Error fetching API data:', error);
+        summaryEl.textContent = `${matches.length} Online Radio Box matches across ${summary.sheetsScanned} sheets (${summary.rowsScanned} rows scanned). API fetch had issues.`;
     });
 }
 
@@ -2542,10 +3191,12 @@ function displayTableFormat(matches) {
     matches.forEach((match, index) => {
         const row = document.createElement('tr');
         
-        // Highlight KEXP results in green
+        // Highlight KEXP results in green, NPR results in blue
         if (match.source === 'kexp') {
             row.style.backgroundColor = '#e6f7e6'; // Light green background
-}
+        } else if (match.source === 'npr') {
+            row.style.backgroundColor = '#e6f0ff'; // Light blue background
+        }
 
         // Check if this track is a variant (case-insensitive matching)
         const matchArtistLower = match.artist.toLowerCase();
@@ -2657,12 +3308,14 @@ function displaySpingridFormat(matches) {
     const spinCounts = {};
     const songNameMap = {}; // Maps normalized key -> original song name (for display)
     const kexpStationInfo = {}; // Track KEXP stations: { artist: { normalizedSong: [{ station, count }] } }
+    const nprStationInfo = {}; // Track NPR stations: { artist: { normalizedSong: [{ station, count }] } }
     
     matches.forEach(match => {
         if (!spinCounts[match.artist]) {
             spinCounts[match.artist] = {};
             songNameMap[match.artist] = {};
             kexpStationInfo[match.artist] = {};
+            nprStationInfo[match.artist] = {};
         }
         
         // Normalize song name for grouping (case-insensitive)
@@ -2674,19 +3327,25 @@ function displaySpingridFormat(matches) {
             spinCounts[match.artist][normalizedSong] = {};
             songNameMap[match.artist][normalizedSong] = match.song;
             kexpStationInfo[match.artist][normalizedSong] = [];
+            nprStationInfo[match.artist][normalizedSong] = [];
         }
         
-        // Track KEXP matches separately for special formatting
+        // Track KEXP and KCRW matches separately for special formatting
         if (match.source === 'kexp') {
             kexpStationInfo[match.artist][normalizedSong].push({
                 station: match.station,
                 count: 1
             });
+        } else if (match.source === 'npr') {
+            nprStationInfo[match.artist][normalizedSong].push({
+                station: match.station,
+                count: 1
+            });
         } else {
-            // Non-KEXP stations use normal counting
+            // Non-KEXP/NPR stations use normal counting
             if (!spinCounts[match.artist][normalizedSong][match.station]) {
                 spinCounts[match.artist][normalizedSong][match.station] = 0;
-            }
+        }
             spinCounts[match.artist][normalizedSong][match.station]++;
         }
     });
@@ -2724,6 +3383,43 @@ function displaySpingridFormat(matches) {
                     spinCounts[artist][normalizedSong] = {};
                 }
                 spinCounts[artist][normalizedSong][kexpStationName] = totalKexpCount;
+            }
+        });
+    });
+    
+    // Aggregate KCRW stations and format them as "KCRW (count) [DJ1][DJ2]"
+    Object.keys(kcrwStationInfo).forEach(artist => {
+        Object.keys(kcrwStationInfo[artist]).forEach(normalizedSong => {
+            const kcrwStations = kcrwStationInfo[artist][normalizedSong];
+            if (kcrwStations.length > 0) {
+                // Aggregate KCRW stations: extract DJ names and count total
+                const djNamesSet = new Set();
+                let totalKcrwCount = 0;
+                
+                kcrwStations.forEach(({ station, count }) => {
+                    totalKcrwCount += count;
+                    // Extract DJ names from brackets: "[DJ Name]" or "Show Name [DJ Name]"
+                    const bracketMatches = station.match(/\[([^\]]+)\]/g);
+                    if (bracketMatches) {
+                        bracketMatches.forEach(bracket => {
+                            // Remove brackets and add DJ name
+                            const djName = bracket.replace(/[\[\]]/g, '');
+                            if (djName) {
+                                djNamesSet.add(djName);
+                            }
+                        });
+                    }
+                });
+                
+                // Format as "KCRW (count) [DJ1][DJ2][DJ3]"
+                const djNames = Array.from(djNamesSet).sort();
+                const kcrwStationName = `KCRW (${totalKcrwCount}) ${djNames.map(dj => `[${dj}]`).join('')}`;
+                
+                // Add to spinCounts
+                if (!spinCounts[artist][normalizedSong]) {
+                    spinCounts[artist][normalizedSong] = {};
+                }
+                spinCounts[artist][normalizedSong][kcrwStationName] = totalKcrwCount;
             }
         });
     });

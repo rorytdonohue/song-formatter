@@ -131,6 +131,19 @@
                     <div id="kexpProgress" style="margin-top: 8px; color: #718096; font-size: 0.95rem;"></div>
                 </div>
             </section>
+
+            <!-- NPR API Section -->
+            <section class="load-section" id="nprSection" style="display: none;">
+                <h3>npr api formatter</h3>
+                <p>fetch playlist data from NPR stations API for artists (supports KCRW, WNYC, WBEZ, etc.).</p>
+                <div class="npr-controls" style="margin-top: 12px;">
+                    <input type="text" id="nprStationId" placeholder="Station ID (e.g., KCRW)" value="KCRW" style="padding: 8px; margin-right: 8px; min-width: 150px;">
+                    <input type="text" id="nprApiKey" placeholder="NPR API key (optional)" style="padding: 8px; margin-right: 8px; min-width: 200px;">
+                    <input type="text" id="nprArtistInput" placeholder="enter artist name" style="padding: 8px; margin-right: 8px; min-width: 200px;">
+                    <button class="process-btn" onclick="fetchNprData()">fetch npr data</button>
+                    <div id="nprProgress" style="margin-top: 8px; color: #718096; font-size: 0.95rem;"></div>
+                </div>
+            </section>
         </main>
 
         <!-- Admin Modal -->
