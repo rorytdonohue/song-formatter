@@ -1194,16 +1194,48 @@ async function fetchWfmuDataForArtists(artistList, progressCallback) {
                 if (progressCallback) {
                     progressCallback(`WFMU: CORS blocked. Trying proxy...`);
                 }
-                // Try with a CORS proxy
-                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-                response = await fetch(proxyUrl);
                 
-                if (response.ok) {
-                    const proxyData = await response.json();
-                    const html = proxyData.contents;
-                    const processed = processWfmuHtml(html, artistName, dateRange);
-                    wfmuResults.push(...processed);
-                    console.log(`[WFMU Debug] Processed ${processed.length} plays from proxy`);
+                // Try multiple CORS proxy services
+                const proxyServices = [
+                    `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+                    `https://corsproxy.io/?${encodeURIComponent(url)}`,
+                    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+                ];
+                
+                let proxySuccess = false;
+                for (const proxyUrl of proxyServices) {
+                    try {
+                        console.log(`[WFMU Debug] Trying proxy: ${proxyUrl.substring(0, 50)}...`);
+                        response = await fetch(proxyUrl);
+                        
+                        if (response.ok) {
+                            let html = '';
+                            // Different proxies return different formats
+                            if (proxyUrl.includes('allorigins.win')) {
+                                const proxyData = await response.json();
+                                html = proxyData.contents;
+                            } else {
+                                // Other proxies return HTML directly
+                                html = await response.text();
+                            }
+                            
+                            const processed = processWfmuHtml(html, artistName, dateRange);
+                            wfmuResults.push(...processed);
+                            console.log(`[WFMU Debug] Processed ${processed.length} plays from proxy`);
+                            proxySuccess = true;
+                            break;
+                        }
+                    } catch (proxyError) {
+                        console.warn(`[WFMU Debug] Proxy failed:`, proxyError);
+                        continue;
+                    }
+                }
+                
+                if (!proxySuccess) {
+                    console.error(`[WFMU Debug] All proxy services failed. WFMU may need server-side fetching.`);
+                    if (progressCallback) {
+                        progressCallback(`WFMU: CORS blocked and proxies failed. Cannot fetch data.`);
+                    }
                     continue;
                 }
             }
