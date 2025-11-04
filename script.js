@@ -1001,21 +1001,54 @@ async function fetchNprDataForArtists(artistList, stationId, apiKey, progressCal
             
             const response = await fetch(url);
             
+            // Check content type first
+            const contentType = response.headers.get('content-type');
+            console.log(`[NPR API Debug] Response status: ${response.status}, Content-Type: ${contentType}`);
+            
             if (!response.ok) {
+                // Try to get error message from response
+                let errorText = '';
+                try {
+                    errorText = await response.text();
+                    console.log(`[NPR API Debug] Error response (first 500 chars):`, errorText.substring(0, 500));
+                } catch (e) {
+                    console.log(`[NPR API Debug] Could not read error response`);
+                }
+                
                 // Try alternative endpoint structure
                 if (response.status === 404) {
+                    console.log(`[NPR API Debug] Trying /plays endpoint instead of /playlists`);
                     // Try /plays endpoint instead
                     url = `${baseUrl}/plays?${params.toString()}`;
                     const altResponse = await fetch(url);
+                    console.log(`[NPR API Debug] /plays endpoint status: ${altResponse.status}`);
+                    
                     if (altResponse.ok) {
-                        const data = await altResponse.json();
-                        nprResults.push(...processNprResponse(data, artistName, station, dateRange, showCache));
-                        continue;
+                        const altContentType = altResponse.headers.get('content-type');
+                        if (altContentType && altContentType.includes('application/json')) {
+                            const data = await altResponse.json();
+                            nprResults.push(...processNprResponse(data, artistName, station, dateRange, showCache));
+                            continue;
+                        } else {
+                            const altErrorText = await altResponse.text();
+                            console.log(`[NPR API Debug] /plays returned non-JSON (first 500 chars):`, altErrorText.substring(0, 500));
+                        }
                     }
                 }
-                console.warn(`${station} API error for ${artistName}: ${response.status}`);
+                console.warn(`[NPR API Debug] ${station} API error for ${artistName}: ${response.status}`);
                 if (progressCallback) {
                     progressCallback(`${station} API returned ${response.status}. Check API key or endpoint.`);
+                }
+                continue;
+            }
+            
+            // Check if response is actually JSON
+            if (!contentType || !contentType.includes('application/json')) {
+                const responseText = await response.text();
+                console.error(`[NPR API Debug] Response is not JSON! Content-Type: ${contentType}`);
+                console.error(`[NPR API Debug] Response body (first 1000 chars):`, responseText.substring(0, 1000));
+                if (progressCallback) {
+                    progressCallback(`${station} API returned non-JSON response. Check endpoint URL.`);
                 }
                 continue;
             }
