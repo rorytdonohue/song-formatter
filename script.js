@@ -974,36 +974,87 @@ async function fetchNprDataForArtists(artistList, stationId, apiKey, progressCal
         
         try {
             // Try different endpoint variations to find the right one
-            // Base URL: https://api.composer.nprstations.org/v1/stations/{STATION_ID}/playlists
+            // Base URL: https://api.composer.nprstations.org/v1/stations/{STATION_ID}/
             let baseUrl = `https://api.composer.nprstations.org/v1/stations/${station}`;
             
-            // Try playlists endpoint first
-            let url = `${baseUrl}/playlists`;
-            const params = new URLSearchParams();
+            // List of endpoint variations to try
+            const endpointVariations = [
+                { path: '/playlists', params: {} },
+                { path: '/plays', params: {} },
+                { path: '/recent-plays', params: {} },
+                { path: '/songs', params: {} },
+                { path: '', params: { type: 'playlist' } } // Try root with query param
+            ];
             
-            // Add date range if API supports it
-            params.append('startDate', dateRange.start);
-            params.append('endDate', dateRange.end);
+            let url = null;
+            let response = null;
             
-            // Add artist search if API supports it
-            params.append('artist', artistName);
-            
-            // Add API key if provided
-            if (apiKey) {
-                params.append('apiKey', apiKey);
+            // Try each endpoint variation
+            for (const endpoint of endpointVariations) {
+                const params = new URLSearchParams();
+                
+                // Add endpoint-specific params
+                Object.entries(endpoint.params).forEach(([key, value]) => {
+                    params.append(key, value);
+                });
+                
+                // Add date range if API supports it
+                params.append('startDate', dateRange.start);
+                params.append('endDate', dateRange.end);
+                
+                // Add artist search if API supports it
+                params.append('artist', artistName);
+                
+                // Add API key if provided
+                if (apiKey) {
+                    params.append('apiKey', apiKey);
+                }
+                
+                url = `${baseUrl}${endpoint.path}`;
+                if (params.toString()) {
+                    url += '?' + params.toString();
+                }
+                
+                console.log(`[NPR API Debug] Trying endpoint: ${url}`);
+                
+                if (progressCallback) {
+                    progressCallback(`Fetching ${station} data from ${endpoint.path || 'root'}...`);
+                }
+                
+                response = await fetch(url);
+                
+                // Check content type first
+                const contentType = response.headers.get('content-type');
+                console.log(`[NPR API Debug] ${endpoint.path || 'root'} - Status: ${response.status}, Content-Type: ${contentType}`);
+                
+                // If we get JSON, this is the right endpoint
+                if (response.ok && contentType && contentType.includes('application/json')) {
+                    console.log(`[NPR API Debug] Success! Found working endpoint: ${endpoint.path || 'root'}`);
+                    break;
+                }
+                
+                // If it's HTML, this isn't the right endpoint - try next one
+                if (contentType && contentType.includes('text/html')) {
+                    console.log(`[NPR API Debug] ${endpoint.path || 'root'} returned HTML, trying next endpoint...`);
+                    continue;
+                }
+                
+                // If it's 404, try next one
+                if (response.status === 404) {
+                    console.log(`[NPR API Debug] ${endpoint.path || 'root'} returned 404, trying next endpoint...`);
+                    continue;
+                }
+                
+                // If we got here, we might have a valid response (even if not JSON)
+                break;
             }
             
-            url += '?' + params.toString();
-            
-            if (progressCallback) {
-                progressCallback(`Fetching ${station} playlist data for ${artistName}...`);
+            if (!response) {
+                throw new Error('No response from any endpoint variation');
             }
             
-            const response = await fetch(url);
-            
-            // Check content type first
+            // Check content type (already checked above, but get it again for consistency)
             const contentType = response.headers.get('content-type');
-            console.log(`[NPR API Debug] Response status: ${response.status}, Content-Type: ${contentType}`);
             
             if (!response.ok) {
                 // Try to get error message from response
