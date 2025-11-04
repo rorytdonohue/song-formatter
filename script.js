@@ -4,6 +4,7 @@ let headersBySheet = {}; // cache headers per sheet
 let matches = []; // { station, artist, song }
 let spinitronMatches = []; // Spinitron data matches
 let onlineradioboxMatches = []; // Online Radio Box data matches
+let kexpMatches = []; // KEXP API data matches
 let tracklistDatabase = {}; // { artistName: [song1, song2, ...] }
 let trackVariants = {}; // { "artist|variantSong": "parentSong" } - maps variant tracks to their parent
 let currentResultFormat = 'table'; // Current display format
@@ -64,6 +65,28 @@ function initializeApp() {
     displayTracklists();
 }
 
+// Clear Spinitron data from display for visual clarity
+function clearSpinitronDisplay() {
+    // Clear Spinitron data array
+    spinitronMatches = [];
+    
+    // Clear Spinitron-specific display containers
+    const csvSpingridContent = document.getElementById('csvSpingridContent');
+    if (csvSpingridContent) csvSpingridContent.innerHTML = '<p style="text-align: center; color: #718096;">No data available.</p>';
+    
+    const csvResultsContent = document.getElementById('csvResultsContent');
+    if (csvResultsContent) csvResultsContent.innerHTML = '';
+    
+    // Also clear from side-by-side comparison view if it exists
+    const resultsDisplayEl = document.getElementById('resultsDisplay');
+    if (resultsDisplayEl) {
+        const csvSpingridContentInDisplay = resultsDisplayEl.querySelector('#csvSpingridContent');
+        if (csvSpingridContentInDisplay) {
+            csvSpingridContentInDisplay.innerHTML = '<p style="text-align: center; color: #718096;">No data available.</p>';
+        }
+    }
+}
+
 // Handle Spinitron upload for Spinitron formatter
 function handleCsvUpload() {
     const fileInput = document.getElementById('csvFile');
@@ -99,6 +122,13 @@ function handleCsvUpload() {
         const spingridBody = document.getElementById('spingridResultsBody');
         if (spingridBody) spingridBody.innerHTML = '';
     }
+    
+    // Clear Spinitron-specific display containers (already cleared spinitronMatches above,
+    // but this ensures the display is visually cleared)
+    const csvSpingridContent = document.getElementById('csvSpingridContent');
+    if (csvSpingridContent) csvSpingridContent.innerHTML = '';
+    const csvResultsContent = document.getElementById('csvResultsContent');
+    if (csvResultsContent) csvResultsContent.innerHTML = '';
     
     // Reset file input value so same file can be uploaded again if needed
     // We'll do this after processing to avoid clearing before read completes
@@ -616,6 +646,446 @@ async function findMatchesForExcel(artistName) {
     }
     
     progressEl.textContent = '';
+}
+
+// Fetch KEXP API data for one or more artists (helper function)
+// Returns array of matches with source: 'kexp' flag
+async function fetchKexpDataForArtists(artistList, progressCallback) {
+    const kexpResults = [];
+    
+    // Cache for show names and DJ info to avoid repeated API calls
+    const showCache = {};
+    
+    for (const artistName of artistList) {
+        if (progressCallback) {
+            progressCallback(`Fetching KEXP data for ${artistName}...`);
+        }
+        
+        // Fetch all pages of results for this artist
+        let nextUrl = `https://api.kexp.org/v2/plays/?artist=${encodeURIComponent(artistName)}&limit=100`;
+        let totalFetched = 0;
+        
+        while (nextUrl) {
+            if (progressCallback) {
+                progressCallback(`Fetching KEXP page ${Math.floor(totalFetched / 100) + 1} for ${artistName}... (${totalFetched} plays)`);
+            }
+            
+            try {
+                const response = await fetch(nextUrl);
+                if (!response.ok) {
+                    console.warn(`KEXP API error for ${artistName}: ${response.status}`);
+                    break;
+                }
+                
+                const data = await response.json();
+                
+                // Process each play result
+                for (const play of data.results) {
+                    // Only include trackplay entries (skip airbreaks)
+                    if (play.play_type !== 'trackplay' || !play.artist || !play.song) {
+                        continue;
+                    }
+                    
+                    // Client-side filtering: only include if artist matches (case-insensitive, fuzzy)
+                    const playArtistLower = play.artist.toLowerCase();
+                    const searchArtistLower = artistName.toLowerCase();
+                    if (!playArtistLower.includes(searchArtistLower) && 
+                        similarityRatio(playArtistLower, searchArtistLower) < FUZZY_THRESHOLD) {
+                        // Try fuzzy match with normalized names
+                        const normalizedPlayArtist = normalizeText(play.artist);
+                        const normalizedSearchArtist = normalizeText(artistName);
+                        if (similarityRatio(normalizedPlayArtist, normalizedSearchArtist) < FUZZY_THRESHOLD) {
+                            continue; // Skip this play - artist doesn't match
+                        }
+                    }
+                    
+                    // Get show name and DJ info (use cache to avoid repeated calls)
+                    let stationName = `KEXP Show ${play.show}`;
+                    let djName = '';
+                    
+                    if (play.show_uri && !showCache[play.show]) {
+                        try {
+                            const showResponse = await fetch(play.show_uri);
+                            if (showResponse.ok) {
+                                const showData = await showResponse.json();
+                                if (showData.program && showData.program.name) {
+                                    stationName = showData.program.name;
+                                } else if (showData.program_name) {
+                                    stationName = showData.program_name;
+                                }
+                                
+                                // Try to get DJ/host name
+                                if (showData.hosts && showData.hosts.length > 0) {
+                                    djName = showData.hosts.map(h => h.name || h).join(', ');
+                                } else if (showData.host) {
+                                    djName = showData.host;
+                                } else if (showData.dj) {
+                                    djName = showData.dj;
+                                }
+                                
+                                showCache[play.show] = { name: stationName, dj: djName };
+                            }
+                        } catch (err) {
+                            console.warn(`Failed to fetch show ${play.show}:`, err);
+                        }
+                    } else if (showCache[play.show]) {
+                        stationName = showCache[play.show].name;
+                        djName = showCache[play.show].dj;
+                    }
+                    
+                    // Format station name with DJ in brackets if available
+                    let finalStationName = stationName;
+                    if (djName) {
+                        finalStationName = `${stationName} [${djName}]`;
+                    }
+                    
+                    // Check if song is in tracklist database (if available)
+                    const hasTracklist = Object.keys(tracklistDatabase).length > 0;
+                    if (hasTracklist) {
+                        const tlMatch = matchTracklistFuzzy(play.artist, play.song);
+                        if (tlMatch.ok) {
+                            // Canonicalize artist and song to database values
+                            kexpResults.push({ 
+                                station: finalStationName, 
+                                artist: tlMatch.artist, 
+                                song: tlMatch.song,
+                                source: 'kexp'
+                            });
+                        } else {
+                            // Artist not in tracklist database - still return the spin
+                            kexpResults.push({ 
+                                station: finalStationName, 
+                                artist: play.artist, 
+                                song: play.song,
+                                source: 'kexp'
+                            });
+                        }
+                    } else {
+                        // No tracklist database - return all results
+                        kexpResults.push({ 
+                            station: finalStationName, 
+                            artist: play.artist, 
+                            song: play.song,
+                            source: 'kexp'
+                        });
+                    }
+                }
+                
+                totalFetched += data.results.length;
+                nextUrl = data.next; // Follow pagination
+                
+                // Small delay to avoid rate limiting
+                if (nextUrl) {
+                    await new Promise(r => setTimeout(r, 100));
+                }
+            } catch (error) {
+                console.error(`Error fetching KEXP data for ${artistName}:`, error);
+                break;
+            }
+        }
+    }
+    
+    return kexpResults;
+}
+
+// Fetch KEXP API data for an artist (UI function)
+async function fetchKexpData() {
+    const artistInput = document.getElementById('kexpArtistInput');
+    const progressEl = document.getElementById('kexpProgress');
+    
+    if (!artistInput || !artistInput.value.trim()) {
+        alert('Please enter an artist name.');
+        return;
+    }
+    
+    const artistName = artistInput.value.trim();
+    
+    // Clear previous KEXP data
+    kexpMatches = [];
+    
+    // Clear previous display
+    const resultsDisplay = document.getElementById('resultsDisplay');
+    if (resultsDisplay) {
+        resultsDisplay.style.display = 'none';
+    }
+    
+    progressEl.textContent = 'Fetching data from KEXP API...';
+    
+    try {
+        const results = await fetchKexpDataForArtists([artistName], (msg) => {
+            progressEl.textContent = msg;
+        });
+        
+        kexpMatches = results;
+        
+        progressEl.textContent = `Found ${kexpMatches.length} plays from KEXP API`;
+        
+        if (kexpMatches.length === 0) {
+            alert(`No plays found for "${artistName}" on KEXP.`);
+            return;
+        }
+        
+        // Display results in the same format as other data sources
+        displayKexpResults();
+        
+    } catch (error) {
+        console.error('Error fetching KEXP data:', error);
+        progressEl.textContent = '';
+        alert(`Error fetching KEXP data: ${error.message}`);
+    }
+}
+
+// Display KEXP results
+function displayKexpResults() {
+    const resultsDisplay = document.getElementById('resultsDisplay');
+    if (!resultsDisplay) return;
+    
+    resultsDisplay.innerHTML = `
+        <div class="results-header">
+            <h3>KEXP API Results</h3>
+            <div class="format-toggles">
+                <button class="format-btn active" onclick="setKexpResultFormat('table')" id="kexpTableFormatBtn">Table View</button>
+                <button class="format-btn" onclick="setKexpResultFormat('station')" id="kexpStationFormatBtn">Station Format</button>
+                <button class="format-btn" onclick="setKexpResultFormat('spingrid')" id="kexpSpingridFormatBtn">Spingrid</button>
+            </div>
+        </div>
+        
+        <!-- Table Format -->
+        <div id="kexpTableFormat" class="result-format">
+            <div class="results-table-container">
+                <table id="kexpResultsTable" class="results-table">
+                    <thead>
+                        <tr>
+                            <th>station</th>
+                            <th>artist</th>
+                            <th>song</th>
+                            <th>actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="kexpResultsTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Station Format -->
+        <div id="kexpStationFormat" class="result-format" style="display: none;">
+            <div class="results-text-container">
+                <div id="kexpStationResultsBody"></div>
+            </div>
+        </div>
+        
+        <!-- Spingrid Format -->
+        <div id="kexpSpingridFormat" class="result-format" style="display: none;">
+            <div class="format-actions">
+                <button class="download-btn" onclick="copyKexpSpingridForExcel()">copy for excel</button>
+            </div>
+            <div class="results-text-container">
+                <div id="kexpSpingridResultsBody"></div>
+            </div>
+        </div>
+    `;
+    
+    // Show in table format initially
+    setKexpResultFormat('table');
+}
+
+// Set KEXP result format and update display
+function setKexpResultFormat(format) {
+    // Update button states
+    document.querySelectorAll('#kexpTableFormatBtn, #kexpStationFormatBtn, #kexpSpingridFormatBtn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`kexp${format.charAt(0).toUpperCase() + format.slice(1)}FormatBtn`).classList.add('active');
+    
+    // Hide all formats
+    document.getElementById('kexpTableFormat').style.display = 'none';
+    document.getElementById('kexpStationFormat').style.display = 'none';
+    document.getElementById('kexpSpingridFormat').style.display = 'none';
+    
+    // Show selected format
+    document.getElementById(`kexp${format.charAt(0).toUpperCase() + format.slice(1)}Format`).style.display = 'block';
+    
+    // Display in selected format
+    switch (format) {
+        case 'table':
+            displayKexpTableFormat();
+            break;
+        case 'station':
+            displayKexpStationFormat();
+            break;
+        case 'spingrid':
+            displayKexpSpingridFormat();
+            break;
+    }
+    
+    // Show results display
+    const resultsDisplay = document.getElementById('resultsDisplay');
+    if (resultsDisplay) {
+        resultsDisplay.style.display = 'block';
+    }
+}
+
+// Display KEXP results in table format
+function displayKexpTableFormat() {
+    const tableBody = document.getElementById('kexpResultsTableBody');
+    if (!tableBody) return;
+    
+    tableBody.innerHTML = '';
+    
+    kexpMatches.forEach((match, index) => {
+        const row = document.createElement('tr');
+        
+        // Highlight all KEXP results in green (they're all from KEXP in this view)
+        row.style.backgroundColor = '#e6f7e6'; // Light green background
+        
+        // Check if this track is a variant (case-insensitive matching)
+        const matchArtistLower = match.artist.toLowerCase();
+        const normalizedMatchSong = normalizeText(match.song);
+        let variantParent = null;
+        for (const [key, parent] of Object.entries(trackVariants)) {
+            const [variantArtist, variantSong] = key.split('|');
+            const normalizedVariantSong = normalizeText(variantSong);
+            if (variantArtist.toLowerCase() === matchArtistLower && normalizedVariantSong === normalizedMatchSong) {
+                variantParent = parent;
+                break;
+            }
+        }
+        const variantIndicator = variantParent ? ` <span style="color: #718096; font-size: 0.85em;">(variant of ${escapeHtml(variantParent)})</span>` : '';
+        
+        // Check if this track is in the tracklist database (recognized in spingrid)
+        const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
+            artist.toLowerCase() === match.artist.toLowerCase()
+        );
+        const isInTracklist = tracklistArtist && tracklistDatabase[tracklistArtist] && 
+            isSongInTracklistFuzzy(tracklistArtist, match.song);
+        
+        // Only show "make variant" button if track is NOT in tracklist database
+        let actionContent = '';
+        if (isInTracklist) {
+            if (variantParent) {
+                actionContent = `<span style="color: #718096; font-size: 0.85em;">in tracklist • variant of ${escapeHtml(variantParent)}</span>`;
+            } else {
+                actionContent = '<span style="color: #718096; font-size: 0.85em;">in tracklist</span>';
+            }
+        } else {
+            actionContent = `
+                <button class="variant-btn" onclick="openVariantModal('${escapeHtml(match.artist)}', '${escapeHtml(match.song)}')" title="Make this track a variant of another track">
+                    make variant
+                </button>
+            `;
+        }
+        
+        row.innerHTML = `
+            <td>${escapeHtml(match.station)}</td>
+            <td>${escapeHtml(match.artist)}</td>
+            <td>${escapeHtml(match.song)}${variantIndicator}</td>
+            <td>${actionContent}</td>
+        `;
+        tableBody.appendChild(row);
+    });
+}
+
+// Display KEXP results in station format
+function displayKexpStationFormat() {
+    const stationResultsBody = document.getElementById('kexpStationResultsBody');
+    if (!stationResultsBody) return;
+    
+    // Group by artist first, then by station and song
+    const artistGroups = {};
+    kexpMatches.forEach(match => {
+        if (!artistGroups[match.artist]) {
+            artistGroups[match.artist] = {};
+        }
+        if (!artistGroups[match.artist][match.station]) {
+            artistGroups[match.artist][match.station] = {};
+        }
+        if (!artistGroups[match.artist][match.station][match.song]) {
+            artistGroups[match.artist][match.station][match.song] = 0;
+        }
+        artistGroups[match.artist][match.station][match.song]++;
+    });
+    
+    let html = '';
+    Object.keys(artistGroups).sort().forEach(artistName => {
+        html += `<div class="artist-section">`;
+        html += `<div class="artist-header">${escapeHtml(artistName)}</div>`;
+        
+        const stations = artistGroups[artistName];
+        Object.keys(stations).sort().forEach(stationName => {
+            const songs = stations[stationName];
+            const songEntries = Object.entries(songs).map(([songName, count]) => {
+                return count > 1 ? `"${escapeHtml(songName)}" (${count})` : `"${escapeHtml(songName)}"`;
+            });
+            
+            html += `<div class="station-entry">${escapeHtml(stationName)} Spun - ${songEntries.join(', ')}</div>`;
+        });
+        
+        html += `</div>`;
+    });
+    
+    stationResultsBody.innerHTML = html;
+}
+
+// Display KEXP results in spingrid format
+function displayKexpSpingridFormat() {
+    const spingridResultsBody = document.getElementById('kexpSpingridResultsBody');
+    if (!spingridResultsBody) return;
+    
+    // Get the artist from KEXP matches
+    const artistList = kexpMatches.length > 0 ? [kexpMatches[0].artist] : [];
+    
+    if (artistList.length === 0) {
+        spingridResultsBody.innerHTML = '<p style="text-align: center; color: #718096;">No artists found.</p>';
+        return;
+    }
+    
+    // Temporarily set artist input so displaySpingridFormat can read it
+    const artistInput = document.getElementById('artistNames');
+    const originalArtistValue = artistInput ? artistInput.value : '';
+    
+    if (artistInput) {
+        artistInput.value = artistList.join(', ');
+    }
+    
+    try {
+        // Use the existing displaySpingridFormat function with KEXP matches
+        displaySpingridFormat(kexpMatches, 'kexpSpingridResultsBody');
+    } finally {
+        // Restore original artist value
+        if (artistInput) {
+            artistInput.value = originalArtistValue;
+        }
+    }
+}
+
+// Copy KEXP spingrid for Excel
+function copyKexpSpingridForExcel() {
+    // Get the artist from KEXP matches
+    const artistList = kexpMatches.length > 0 ? [kexpMatches[0].artist] : [];
+    
+    if (artistList.length === 0) {
+        alert('No KEXP data to copy.');
+        return;
+    }
+    
+    // Temporarily set artist input and matches, then call the function
+    const artistInput = document.getElementById('artistNames');
+    const originalArtistValue = artistInput ? artistInput.value : '';
+    const originalMatches = matches;
+    
+    if (artistInput) {
+        artistInput.value = artistList.join(', ');
+    }
+    matches = kexpMatches;
+    
+    try {
+        copySpingridForExcel();
+    } finally {
+        // Restore original values
+        if (artistInput) {
+            artistInput.value = originalArtistValue;
+        }
+        matches = originalMatches;
+    }
 }
 
 // Show side-by-side spingrids
@@ -1419,6 +1889,10 @@ async function loadStoredFile() {
             }
             
             console.log('Headers found:', firstHeaders);
+            
+            // Clear Spinitron data when a new ORB file is loaded
+            clearSpinitronDisplay();
+            
             showProcessingSection();
             
         } catch (error) {
@@ -1580,6 +2054,9 @@ async function findMatches() {
         return;
     }
     
+    // Clear Spinitron data when searching for a different artist in ORB
+    clearSpinitronDisplay();
+    
     // parse artist names
     const rawArtists = document.getElementById('artistNames').value || '';
     const artistList = rawArtists
@@ -1650,16 +2127,36 @@ async function findMatches() {
     // Sort matches by artist order (as entered) then by song title
     const sortedMatches = sortMatchesByArtistOrder(matches, artistList);
     
+    // Automatically fetch KEXP data for the same artists
+    progressEl.textContent = 'Fetching KEXP data...';
+    try {
+        const kexpResults = await fetchKexpDataForArtists(artistList, (msg) => {
+            progressEl.textContent = msg;
+        });
+        
+        // Merge KEXP results with Online Radio Box matches
+        matches = [...sortedMatches, ...kexpResults];
+        
+        // Re-sort combined results
+        matches = sortMatchesByArtistOrder(matches, artistList);
+    } catch (error) {
+        console.error('Error fetching KEXP data:', error);
+        // Continue with just Online Radio Box matches if KEXP fails
+        matches = sortedMatches;
+    }
+    
     downloadBtn.disabled = matches.length === 0;
     findBtn.disabled = false;
     findBtn.innerHTML = 'Find Matches';
     findBtn.classList.remove('loading');
     progressEl.textContent = '';
     const summaryEl = document.getElementById('summary');
-    summaryEl.textContent = `${matches.length} matches found across ${summary.sheetsScanned} sheets (${summary.rowsScanned} rows scanned).`;
+    const kexpCount = matches.filter(m => m.source === 'kexp').length;
+    const orbCount = matches.length - kexpCount;
+    summaryEl.textContent = `${orbCount} Online Radio Box matches across ${summary.sheetsScanned} sheets (${summary.rowsScanned} rows scanned). ${kexpCount > 0 ? `${kexpCount} KEXP matches.` : ''}`;
     
     // Display results in current format
-    displayResults(sortedMatches);
+    displayResults(matches);
 }
 
 // Try multiple columns and strategies to extract artist/song
@@ -1776,6 +2273,11 @@ function displayTableFormat(matches) {
     // Add rows for each match
     matches.forEach((match, index) => {
         const row = document.createElement('tr');
+        
+        // Highlight KEXP results in green
+        if (match.source === 'kexp') {
+            row.style.backgroundColor = '#e6f7e6'; // Light green background
+        }
         
         // Check if this track is a variant (case-insensitive matching)
         const matchArtistLower = match.artist.toLowerCase();

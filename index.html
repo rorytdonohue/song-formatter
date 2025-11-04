@@ -120,6 +120,17 @@
                 <input type="file" id="csvFile" accept=".csv,text/csv,application/vnd.ms-excel" style="display: none;" onchange="handleCsvUpload()">
                 <button class="process-btn" onclick="document.getElementById('csvFile').click()">click to upload</button>
             </section>
+
+            <!-- KEXP API Section -->
+            <section class="load-section" id="kexpSection">
+                <h3>kexp api formatter</h3>
+                <p>fetch playlist data from KEXP API for artists.</p>
+                <div class="kexp-controls" style="margin-top: 12px;">
+                    <input type="text" id="kexpArtistInput" placeholder="enter artist name" style="padding: 8px; margin-right: 8px; min-width: 200px;">
+                    <button class="process-btn" onclick="fetchKexpData()">fetch kexp data</button>
+                    <div id="kexpProgress" style="margin-top: 8px; color: #718096; font-size: 0.95rem;"></div>
+                </div>
+            </section>
         </main>
 
         <!-- Admin Modal -->
