@@ -4390,8 +4390,14 @@ function displaySpingridFormat(matches) {
                 if (group.variants.length > 0) {
                     group.variants.forEach(variantSong => {
                         const normalizedVariant = normalizeText(variantSong);
-                        // Find matching artist in spinCounts (case-insensitive)
-                        const matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
+                        // Find matching artist in spinCounts (case-insensitive, with fuzzy fallback)
+                        let matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
+                        if (!matchingArtistKey && Object.keys(spinCounts).length > 0) {
+                            matchingArtistKey = Object.keys(spinCounts).find(a => {
+                                const similarity = similarityRatio(a.toLowerCase(), tracklistArtistLower);
+                                return similarity >= 0.8; // High threshold for artist matching
+                            });
+                        }
                         const variantSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedVariant];
                         const variantCount = variantSpins ? Object.values(variantSpins).reduce((sum, count) => sum + count, 0) : 0;
                         const variantStationList = variantSpins ? Object.entries(variantSpins)
