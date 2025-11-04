@@ -4310,8 +4310,9 @@ function displaySpingridFormat(matches) {
                     // Find all variants of this song (for this artist)
                     Object.entries(trackVariants).forEach(([key, parent]) => {
                         const [variantArtist] = key.split('|');
+                        const normalizedVariantArtist = normalizeText(variantArtist);
                         const normalizedParent = normalizeText(parent);
-                        if (variantArtist.toLowerCase() === tracklistArtistLower && normalizedParent === normalizedSongName) {
+                        if (normalizedVariantArtist === normalizedTracklistArtist && normalizedParent === normalizedSongName) {
                             const [, variantSong] = key.split('|');
                             if (variantSong) {
                                 parentGroups[songName].variants.push(variantSong);
