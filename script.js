@@ -4270,19 +4270,21 @@ function displaySpingridFormat(matches) {
         if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
             // Artist has tracks in database - show all their songs
             const songs = tracklistDatabase[tracklistArtist];
-            const tracklistArtistLower = tracklistArtist.toLowerCase();
+            // Use normalized artist name for lookup in spinCounts
+            const normalizedTracklistArtist = normalizeText(tracklistArtist);
             
             // Group variants under their parent tracks
             const parentGroups = {}; // { parentSong: { variants: [...], spins: {...} } }
             const standaloneSongs = []; // Songs that are not variants and have no variants
             
             songs.forEach(songName => {
-                // Check if this song is itself a variant (case-insensitive artist matching)
+                // Check if this song is itself a variant (normalized artist matching)
                 const normalizedSongName = normalizeText(songName);
                 const isVariant = Object.entries(trackVariants).some(([key, parent]) => {
                     const [variantArtist, variantSong] = key.split('|');
+                    const normalizedVariantArtist = normalizeText(variantArtist);
                     const normalizedVariantSong = normalizeText(variantSong);
-                    return variantArtist.toLowerCase() === tracklistArtistLower && normalizedVariantSong === normalizedSongName;
+                    return normalizedVariantArtist === normalizedTracklistArtist && normalizedVariantSong === normalizedSongName;
                 });
                 
                 if (isVariant) {
@@ -4291,11 +4293,12 @@ function displaySpingridFormat(matches) {
                 }
                 
                 // Check if this song is a parent (has variants pointing to it for this artist)
-                // Use case-insensitive matching for artist and normalize parent song for comparison
+                // Use normalized matching for artist and normalize parent song for comparison
                 const hasVariants = Object.entries(trackVariants).some(([key, parent]) => {
                     const [variantArtist] = key.split('|');
+                    const normalizedVariantArtist = normalizeText(variantArtist);
                     const normalizedParent = normalizeText(parent);
-                    return variantArtist.toLowerCase() === tracklistArtistLower && normalizedParent === normalizedSongName;
+                    return normalizedVariantArtist === normalizedTracklistArtist && normalizedParent === normalizedSongName;
                 });
                 
                 if (hasVariants) {
