@@ -4328,16 +4328,24 @@ function displaySpingridFormat(matches) {
                     
                     // Also add spins from the parent track itself (normalize to match normalized keys)
                     const normalizedParentSong = normalizeText(songName);
-                    let parentSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][normalizedParentSong];
+                    // Find matching artist in spinCounts (case-insensitive, with fuzzy fallback)
+                    let matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
+                    if (!matchingArtistKey && Object.keys(spinCounts).length > 0) {
+                        matchingArtistKey = Object.keys(spinCounts).find(a => {
+                            const similarity = similarityRatio(a.toLowerCase(), tracklistArtistLower);
+                            return similarity >= 0.8; // High threshold for artist matching
+                        });
+                    }
+                    let parentSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedParentSong];
                     
-                    // If not found, try fuzzy match (keys are already normalized, so compare normalized lookup)
-                    if (!parentSpins && spinCounts[tracklistArtist]) {
-                        const foundMatch = Object.keys(spinCounts[tracklistArtist]).find(spinSong => {
+                    // If not found, try fuzzy match on song name (keys are already normalized, so compare normalized lookup)
+                    if (!parentSpins && matchingArtistKey && spinCounts[matchingArtistKey]) {
+                        const foundMatch = Object.keys(spinCounts[matchingArtistKey]).find(spinSong => {
                             return normalizedParentSong === spinSong || 
                                    similarityRatio(normalizedParentSong, spinSong) >= FUZZY_THRESHOLD;
                         });
                         if (foundMatch) {
-                            parentSpins = spinCounts[tracklistArtist][foundMatch];
+                            parentSpins = spinCounts[matchingArtistKey][foundMatch];
                         }
                     }
                     
