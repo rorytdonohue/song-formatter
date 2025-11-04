@@ -1061,11 +1061,24 @@ async function fetchNprDataForArtists(artistList, stationId, apiKey, progressCal
             }
             
             if (!response) {
-                throw new Error('No response from any endpoint variation');
+                console.error('[NPR API Debug] No valid response from any endpoint variation');
+                if (progressCallback) {
+                    progressCallback(`${station} API: All endpoints returned HTML or errors. API may require authentication or different endpoint structure.`);
+                }
+                continue;
             }
             
             // Check content type (already checked above, but get it again for consistency)
             const contentType = response.headers.get('content-type');
+            
+            // If we still got HTML after all attempts, provide helpful info
+            if (contentType && contentType.includes('text/html') && !response.ok) {
+                console.error(`[NPR API Debug] All endpoints returned HTML. The NPR Composer API may:`);
+                console.error(`[NPR API Debug] 1. Require an API key (register at https://api.composer.nprstations.org)`);
+                console.error(`[NPR API Debug] 2. Use a different endpoint structure`);
+                console.error(`[NPR API Debug] 3. Require authentication headers`);
+                console.error(`[NPR API Debug] 4. Not be publicly accessible`);
+            }
             
             if (!response.ok) {
                 // Try to get error message from response
