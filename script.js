@@ -1183,6 +1183,7 @@ async function fetchWfmuDataForArtists(artistList, progressCallback) {
             
             // Try to fetch the page
             let response;
+            let proxySuccess = false; // Track if we successfully used a proxy
             try {
                 response = await fetch(url, {
                     headers: {
@@ -1201,8 +1202,6 @@ async function fetchWfmuDataForArtists(artistList, progressCallback) {
                     `https://corsproxy.io/?${encodeURIComponent(url)}`,
                     `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
                 ];
-                
-                let proxySuccess = false;
                 for (const proxyUrl of proxyServices) {
                     try {
                         console.log(`[WFMU Debug] Trying proxy: ${proxyUrl.substring(0, 50)}...`);
