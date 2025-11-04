@@ -1219,6 +1219,11 @@ async function fetchWfmuDataForArtists(artistList, progressCallback) {
                                 html = await response.text();
                             }
                             
+                            // Log a sample of the HTML to debug
+                            if (wfmuResults.length === 0) {
+                                console.log(`[WFMU Debug] HTML sample (first 1000 chars):`, html.substring(0, 1000));
+                            }
+                            
                             const processed = processWfmuHtml(html, artistName, dateRange);
                             wfmuResults.push(...processed);
                             console.log(`[WFMU Debug] Processed ${processed.length} plays from proxy`);
@@ -1272,10 +1277,23 @@ function processWfmuHtml(html, artistName, dateRange) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
     
-    // Find all table rows in the tbody (skip header row)
-    const rows = doc.querySelectorAll('tbody tr');
+    // Find all table rows - try multiple selectors
+    let rows = doc.querySelectorAll('tbody tr');
+    if (rows.length === 0) {
+        // Try without tbody
+        rows = doc.querySelectorAll('table tr');
+    }
+    if (rows.length === 0) {
+        // Try any tr
+        rows = doc.querySelectorAll('tr');
+    }
     
     console.log(`[WFMU Debug] Found ${rows.length} rows in HTML`);
+    
+    // Log first few rows to debug structure
+    if (rows.length > 0) {
+        console.log(`[WFMU Debug] First row HTML sample:`, rows[0].outerHTML.substring(0, 300));
+    }
     
     rows.forEach((row, index) => {
         try {
@@ -1287,23 +1305,49 @@ function processWfmuHtml(html, artistName, dateRange) {
             // Extract data from table cells
             const cells = row.querySelectorAll('td');
             if (cells.length < 5) {
-                if (index < 3) {
-                    console.log(`[WFMU Debug] Row ${index} has ${cells.length} cells, expected 5`);
+                if (index < 5) {
+                    console.log(`[WFMU Debug] Row ${index} has ${cells.length} cells, expected 5. HTML:`, row.outerHTML.substring(0, 200));
                 }
                 return;
             }
             
-            // Column 0: Artist
-            const artistCell = cells[0];
-            const artist = artistCell ? artistCell.textContent.trim() : '';
+            // Skip rows that might be in nested tables or other structures
+            // Check if this row is actually in the main results table
+            const hasGeneralText = Array.from(cells).some(cell => 
+                cell.querySelector('.generaltext') || cell.classList.contains('generaltext')
+            );
+            if (!hasGeneralText && index < 5) {
+                console.log(`[WFMU Debug] Row ${index} doesn't have .generaltext class, skipping`);
+                return;
+            }
             
-            // Column 1: Song
+            // Column 0: Artist (look for .generaltext span)
+            const artistCell = cells[0];
+            let artist = '';
+            if (artistCell) {
+                const artistSpan = artistCell.querySelector('.generaltext');
+                artist = artistSpan ? artistSpan.textContent.trim() : artistCell.textContent.trim();
+                // Clean up HTML entities
+                artist = artist.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+            }
+            
+            // Column 1: Song (look for .generaltext span)
             const songCell = cells[1];
-            const song = songCell ? songCell.textContent.trim() : '';
+            let song = '';
+            if (songCell) {
+                const songSpan = songCell.querySelector('.generaltext');
+                song = songSpan ? songSpan.textContent.trim() : songCell.textContent.trim();
+                // Remove any extra text like "(+1 other song)"
+                song = song.replace(/\s*\([^)]*\)\s*/g, '').trim();
+            }
             
             // Column 3: Program (DJ/Show name)
             const programCell = cells[3];
-            const program = programCell ? programCell.textContent.trim() : '';
+            let program = '';
+            if (programCell) {
+                const programSpan = programCell.querySelector('.generaltext');
+                program = programSpan ? programSpan.textContent.trim() : programCell.textContent.trim();
+            }
             
             // Column 4: Date link
             const dateCell = cells[4];
@@ -5433,3 +5477,4 @@ function getParentSong(artist, song) {
     const variantKey = `${artist}|${song}`;
     return trackVariants[variantKey] || song;
 }
+
