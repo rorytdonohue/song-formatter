@@ -800,9 +800,12 @@ async function fetchKexpDataForArtists(artistList, progressCallback) {
                                     stationName = showData.name;
                                 }
                                 
-                                // Get DJ/host name - try multiple possible fields
+                                // Get DJ/host name - KEXP API uses host_names array
                                 if (!djName) {
-                                    if (showData.hosts && Array.isArray(showData.hosts) && showData.hosts.length > 0) {
+                                    if (showData.host_names && Array.isArray(showData.host_names) && showData.host_names.length > 0) {
+                                        // host_names is an array of strings like ['Troy Nelson']
+                                        djName = showData.host_names.join(', ');
+                                    } else if (showData.hosts && Array.isArray(showData.hosts) && showData.hosts.length > 0) {
                                         djName = showData.hosts.map(h => {
                                             if (typeof h === 'string') return h;
                                             if (h && typeof h === 'object') {
