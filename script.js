@@ -4082,20 +4082,25 @@ function displaySpingridFormat(matches) {
     }
     
     // Group matches by artist and song for spin counts
-    // Use normalized song names as keys to handle case variations (e.g., "This is" vs "This Is")
+    // Use normalized artist AND song names as keys to handle case variations
     const spinCounts = {};
-    const songNameMap = {}; // Maps normalized key -> original song name (for display)
-    const kexpStationInfo = {}; // Track KEXP stations: { artist: { normalizedSong: [{ station, count }] } }
-    const kcrwStationInfo = {}; // Track KCRW stations: { artist: { normalizedSong: [{ station, count }] } }
-    const wfmuStationInfo = {}; // Track WFMU stations: { artist: { normalizedSong: [{ station, count }] } }
+    const artistNameMap = {}; // Maps normalized artist key -> original artist name (for display)
+    const songNameMap = {}; // Maps normalized artist -> normalized song -> original song name (for display)
+    const kexpStationInfo = {}; // Track KEXP stations: { normalizedArtist: { normalizedSong: [{ station, count }] } }
+    const kcrwStationInfo = {}; // Track KCRW stations: { normalizedArtist: { normalizedSong: [{ station, count }] } }
+    const wfmuStationInfo = {}; // Track WFMU stations: { normalizedArtist: { normalizedSong: [{ station, count }] } }
     
     matches.forEach(match => {
-        if (!spinCounts[match.artist]) {
-            spinCounts[match.artist] = {};
-            songNameMap[match.artist] = {};
-            kexpStationInfo[match.artist] = {};
-            kcrwStationInfo[match.artist] = {};
-            wfmuStationInfo[match.artist] = {};
+        // Normalize artist name for grouping (case-insensitive)
+        const normalizedArtist = normalizeText(match.artist);
+        
+        if (!spinCounts[normalizedArtist]) {
+            spinCounts[normalizedArtist] = {};
+            artistNameMap[normalizedArtist] = match.artist; // Store original artist name
+            songNameMap[normalizedArtist] = {};
+            kexpStationInfo[normalizedArtist] = {};
+            kcrwStationInfo[normalizedArtist] = {};
+            wfmuStationInfo[normalizedArtist] = {};
         }
         
         // Normalize song name for grouping (case-insensitive)
@@ -4103,36 +4108,36 @@ function displaySpingridFormat(matches) {
         
         // Use normalized key, but track original song name for display
         // Prefer the first occurrence or one that matches database if available
-        if (!spinCounts[match.artist][normalizedSong]) {
-            spinCounts[match.artist][normalizedSong] = {};
-            songNameMap[match.artist][normalizedSong] = match.song;
-            kexpStationInfo[match.artist][normalizedSong] = [];
-            kcrwStationInfo[match.artist][normalizedSong] = [];
-            wfmuStationInfo[match.artist][normalizedSong] = [];
+        if (!spinCounts[normalizedArtist][normalizedSong]) {
+            spinCounts[normalizedArtist][normalizedSong] = {};
+            songNameMap[normalizedArtist][normalizedSong] = match.song;
+            kexpStationInfo[normalizedArtist][normalizedSong] = [];
+            kcrwStationInfo[normalizedArtist][normalizedSong] = [];
+            wfmuStationInfo[normalizedArtist][normalizedSong] = [];
         }
         
         // Track KEXP, KCRW, and WFMU matches separately for special formatting
         if (match.source === 'kexp') {
-            kexpStationInfo[match.artist][normalizedSong].push({
+            kexpStationInfo[normalizedArtist][normalizedSong].push({
                 station: match.station,
                 count: 1
             });
         } else if (match.source === 'npr') {
-            kcrwStationInfo[match.artist][normalizedSong].push({
+            kcrwStationInfo[normalizedArtist][normalizedSong].push({
                 station: match.station,
                 count: 1
             });
         } else if (match.source === 'wfmu') {
-            wfmuStationInfo[match.artist][normalizedSong].push({
+            wfmuStationInfo[normalizedArtist][normalizedSong].push({
                 station: match.station,
                 count: 1
             });
         } else {
             // Non-KEXP/KCRW/WFMU stations use normal counting
-            if (!spinCounts[match.artist][normalizedSong][match.station]) {
-                spinCounts[match.artist][normalizedSong][match.station] = 0;
+            if (!spinCounts[normalizedArtist][normalizedSong][match.station]) {
+                spinCounts[normalizedArtist][normalizedSong][match.station] = 0;
             }
-            spinCounts[match.artist][normalizedSong][match.station]++;
+            spinCounts[normalizedArtist][normalizedSong][match.station]++;
         }
     });
     
@@ -4313,15 +4318,8 @@ function displaySpingridFormat(matches) {
                                 
                                 // Aggregate spins from variant tracks (normalize to match normalized keys)
                                 const normalizedVariant = normalizeText(variantSong);
-                                // Find matching artist in spinCounts (case-insensitive, with fuzzy fallback)
-                                let matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
-                                if (!matchingArtistKey && Object.keys(spinCounts).length > 0) {
-                                    matchingArtistKey = Object.keys(spinCounts).find(a => {
-                                        const similarity = similarityRatio(a.toLowerCase(), tracklistArtistLower);
-                                        return similarity >= 0.8; // High threshold for artist matching
-                                    });
-                                }
-                                const variantSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedVariant];
+                                // spinCounts now uses normalized artist keys, so direct lookup
+                                const variantSpins = spinCounts[normalizedTracklistArtist] && spinCounts[normalizedTracklistArtist][normalizedVariant];
                                 if (variantSpins) {
                                     Object.entries(variantSpins).forEach(([station, count]) => {
                                         if (!parentGroups[songName].spins[station]) {
@@ -4336,24 +4334,17 @@ function displaySpingridFormat(matches) {
                     
                     // Also add spins from the parent track itself (normalize to match normalized keys)
                     const normalizedParentSong = normalizeText(songName);
-                    // Find matching artist in spinCounts (case-insensitive, with fuzzy fallback)
-                    let matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
-                    if (!matchingArtistKey && Object.keys(spinCounts).length > 0) {
-                        matchingArtistKey = Object.keys(spinCounts).find(a => {
-                            const similarity = similarityRatio(a.toLowerCase(), tracklistArtistLower);
-                            return similarity >= 0.8; // High threshold for artist matching
-                        });
-                    }
-                    let parentSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedParentSong];
+                    // spinCounts now uses normalized artist keys, so direct lookup
+                    let parentSpins = spinCounts[normalizedTracklistArtist] && spinCounts[normalizedTracklistArtist][normalizedParentSong];
                     
                     // If not found, try fuzzy match on song name (keys are already normalized, so compare normalized lookup)
-                    if (!parentSpins && matchingArtistKey && spinCounts[matchingArtistKey]) {
-                        const foundMatch = Object.keys(spinCounts[matchingArtistKey]).find(spinSong => {
+                    if (!parentSpins && spinCounts[normalizedTracklistArtist]) {
+                        const foundMatch = Object.keys(spinCounts[normalizedTracklistArtist]).find(spinSong => {
                             return normalizedParentSong === spinSong || 
                                    similarityRatio(normalizedParentSong, spinSong) >= FUZZY_THRESHOLD;
                         });
                         if (foundMatch) {
-                            parentSpins = spinCounts[matchingArtistKey][foundMatch];
+                            parentSpins = spinCounts[normalizedTracklistArtist][foundMatch];
                         }
                     }
                     
@@ -4390,15 +4381,8 @@ function displaySpingridFormat(matches) {
                 if (group.variants.length > 0) {
                     group.variants.forEach(variantSong => {
                         const normalizedVariant = normalizeText(variantSong);
-                        // Find matching artist in spinCounts (case-insensitive, with fuzzy fallback)
-                        let matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
-                        if (!matchingArtistKey && Object.keys(spinCounts).length > 0) {
-                            matchingArtistKey = Object.keys(spinCounts).find(a => {
-                                const similarity = similarityRatio(a.toLowerCase(), tracklistArtistLower);
-                                return similarity >= 0.8; // High threshold for artist matching
-                            });
-                        }
-                        const variantSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedVariant];
+                        // spinCounts now uses normalized artist keys, so direct lookup
+                        const variantSpins = spinCounts[normalizedTracklistArtist] && spinCounts[normalizedTracklistArtist][normalizedVariant];
                         const variantCount = variantSpins ? Object.values(variantSpins).reduce((sum, count) => sum + count, 0) : 0;
                         const variantStationList = variantSpins ? Object.entries(variantSpins)
                             .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
