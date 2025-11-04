@@ -648,29 +648,32 @@ async function findMatchesForExcel(artistName) {
     progressEl.textContent = '';
 }
 
-// Calculate date range: previous Thursday to last Thursday (one week)
+// Calculate date range: last last Thursday to current previous Thursday (one week)
+// This ensures consistent weekly range regardless of when accessed
 function getKexpDateRange() {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
-    // Get last Thursday (most recent Thursday, including today if it's Thursday)
-    const lastThursday = new Date(today);
-    const dayOfWeek = lastThursday.getDay(); // 0 = Sunday, 4 = Thursday
-    // If today is Thursday (4), we want today. Otherwise, go back to the most recent Thursday
+    // Get current previous Thursday (most recent Thursday that has passed, excluding today if it's Thursday)
+    const currentPreviousThursday = new Date(today);
+    const dayOfWeek = currentPreviousThursday.getDay(); // 0 = Sunday, 4 = Thursday
+    
     let daysToSubtract = 0;
     if (dayOfWeek < 4) {
         // Before Thursday: go back to previous week's Thursday
         daysToSubtract = dayOfWeek + 3; // e.g., Monday (1) -> back 4 days to Thursday
-    } else if (dayOfWeek > 4) {
-        // After Thursday: go back to this week's Thursday
+    } else if (dayOfWeek === 4) {
+        // If today IS Thursday, go back one week to last Thursday (exclude today)
+        daysToSubtract = 7;
+    } else {
+        // After Thursday: go back to this week's Thursday (which has already passed)
         daysToSubtract = dayOfWeek - 4; // e.g., Saturday (6) -> back 2 days to Thursday
     }
-    // If dayOfWeek === 4, it's Thursday, so daysToSubtract = 0 (use today)
-    lastThursday.setDate(today.getDate() - daysToSubtract);
+    currentPreviousThursday.setDate(today.getDate() - daysToSubtract);
     
-    // Get previous Thursday (one week before last Thursday)
-    const previousThursday = new Date(lastThursday);
-    previousThursday.setDate(lastThursday.getDate() - 7);
+    // Get last last Thursday (two Thursdays ago, one week before current previous Thursday)
+    const lastLastThursday = new Date(currentPreviousThursday);
+    lastLastThursday.setDate(currentPreviousThursday.getDate() - 7);
     
     // Format as ISO strings for API (YYYY-MM-DD)
     const formatDate = (date) => {
@@ -681,8 +684,8 @@ function getKexpDateRange() {
     };
     
     return {
-        start: formatDate(previousThursday),
-        end: formatDate(lastThursday)
+        start: formatDate(lastLastThursday),
+        end: formatDate(currentPreviousThursday)
     };
 }
 
