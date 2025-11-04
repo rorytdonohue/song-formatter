@@ -4313,7 +4313,15 @@ function displaySpingridFormat(matches) {
                                 
                                 // Aggregate spins from variant tracks (normalize to match normalized keys)
                                 const normalizedVariant = normalizeText(variantSong);
-                                const variantSpins = spinCounts[tracklistArtist] && spinCounts[tracklistArtist][normalizedVariant];
+                                // Find matching artist in spinCounts (case-insensitive, with fuzzy fallback)
+                                let matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
+                                if (!matchingArtistKey && Object.keys(spinCounts).length > 0) {
+                                    matchingArtistKey = Object.keys(spinCounts).find(a => {
+                                        const similarity = similarityRatio(a.toLowerCase(), tracklistArtistLower);
+                                        return similarity >= 0.8; // High threshold for artist matching
+                                    });
+                                }
+                                const variantSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedVariant];
                                 if (variantSpins) {
                                     Object.entries(variantSpins).forEach(([station, count]) => {
                                         if (!parentGroups[songName].spins[station]) {
@@ -4487,6 +4495,11 @@ function displaySpingridFormat(matches) {
     console.log('[Spingrid Debug] Generated HTML length:', html.length);
     console.log('[Spingrid Debug] Number of artists processed:', artistList.length);
     console.log('[Spingrid Debug] Total matches:', matches.length);
+    console.log('[Spingrid Debug] spinCounts keys:', Object.keys(spinCounts));
+    if (Object.keys(spinCounts).length > 0) {
+        const firstArtist = Object.keys(spinCounts)[0];
+        console.log('[Spingrid Debug] Sample spinCounts for', firstArtist, ':', Object.keys(spinCounts[firstArtist]));
+    }
     
     if (!html || html.trim() === '') {
         console.warn('[Spingrid Debug] HTML is empty, setting default message');
