@@ -758,12 +758,38 @@ async function fetchKexpDataForArtists(artistList, progressCallback) {
                     let djName = '';
                     let stationName = '';
                     
-                    // Fetch show details if not cached
+                    // Log first play object to see structure (for debugging)
+                    if (kexpResults.length === 0) {
+                        console.log('KEXP Play object sample:', play);
+                        console.log('Available play fields:', Object.keys(play));
+                    }
+                    
+                    // First check if play object has host/dj info directly
+                    if (play.hosts && Array.isArray(play.hosts) && play.hosts.length > 0) {
+                        djName = play.hosts.map(h => {
+                            if (typeof h === 'string') return h;
+                            if (h && typeof h === 'object') return h.name || h.display_name || h.full_name || '';
+                            return '';
+                        }).filter(h => h).join(', ');
+                    } else if (play.host) {
+                        if (typeof play.host === 'string') {
+                            djName = play.host;
+                        } else if (play.host && typeof play.host === 'object') {
+                            djName = play.host.name || play.host.display_name || play.host.full_name || '';
+                        }
+                    }
+                    
+                    // Fetch show details if not cached and we don't have DJ name yet
                     if (play.show_uri && !showCache[play.show]) {
                         try {
                             const showResponse = await fetch(play.show_uri);
                             if (showResponse.ok) {
                                 const showData = await showResponse.json();
+                                
+                                // Log first few show responses to debug structure
+                                if (Object.keys(showCache).length < 3) {
+                                    console.log('KEXP Show API Response:', showData);
+                                }
                                 
                                 // Get show/program name
                                 if (showData.program && showData.program.name) {
@@ -775,26 +801,42 @@ async function fetchKexpDataForArtists(artistList, progressCallback) {
                                 }
                                 
                                 // Get DJ/host name - try multiple possible fields
-                                if (showData.hosts && Array.isArray(showData.hosts) && showData.hosts.length > 0) {
-                                    djName = showData.hosts.map(h => {
-                                        if (typeof h === 'string') return h;
-                                        if (h && typeof h === 'object') return h.name || h.display_name || JSON.stringify(h);
-                                        return '';
-                                    }).filter(h => h).join(', ');
-                                } else if (showData.host) {
-                                    if (typeof showData.host === 'string') {
-                                        djName = showData.host;
-                                    } else if (showData.host && typeof showData.host === 'object') {
-                                        djName = showData.host.name || showData.host.display_name || JSON.stringify(showData.host);
+                                if (!djName) {
+                                    if (showData.hosts && Array.isArray(showData.hosts) && showData.hosts.length > 0) {
+                                        djName = showData.hosts.map(h => {
+                                            if (typeof h === 'string') return h;
+                                            if (h && typeof h === 'object') {
+                                                return h.name || h.display_name || h.full_name || h.username || '';
+                                            }
+                                            return '';
+                                        }).filter(h => h).join(', ');
+                                    } else if (showData.host) {
+                                        if (typeof showData.host === 'string') {
+                                            djName = showData.host;
+                                        } else if (showData.host && typeof showData.host === 'object') {
+                                            djName = showData.host.name || showData.host.display_name || showData.host.full_name || showData.host.username || '';
+                                        }
+                                    } else if (showData.dj) {
+                                        if (typeof showData.dj === 'string') {
+                                            djName = showData.dj;
+                                        } else if (showData.dj && typeof showData.dj === 'object') {
+                                            djName = showData.dj.name || showData.dj.display_name || showData.dj.full_name || showData.dj.username || '';
+                                        }
+                                    } else if (showData.dj_name) {
+                                        djName = showData.dj_name;
+                                    } else if (showData.program && showData.program.hosts) {
+                                        // Try nested in program object
+                                        const programHosts = showData.program.hosts;
+                                        if (Array.isArray(programHosts) && programHosts.length > 0) {
+                                            djName = programHosts.map(h => {
+                                                if (typeof h === 'string') return h;
+                                                if (h && typeof h === 'object') {
+                                                    return h.name || h.display_name || h.full_name || h.username || '';
+                                                }
+                                                return '';
+                                            }).filter(h => h).join(', ');
+                                        }
                                     }
-                                } else if (showData.dj) {
-                                    if (typeof showData.dj === 'string') {
-                                        djName = showData.dj;
-                                    } else if (showData.dj && typeof showData.dj === 'object') {
-                                        djName = showData.dj.name || showData.dj.display_name || JSON.stringify(showData.dj);
-                                    }
-                                } else if (showData.dj_name) {
-                                    djName = showData.dj_name;
                                 }
                                 
                                 showCache[play.show] = { name: stationName, dj: djName };
@@ -805,7 +847,9 @@ async function fetchKexpDataForArtists(artistList, progressCallback) {
                         }
                     } else if (showCache[play.show]) {
                         stationName = showCache[play.show].name;
-                        djName = showCache[play.show].dj;
+                        if (!djName) {
+                            djName = showCache[play.show].dj;
+                        }
                     }
                     
                     // Format station name - prioritize DJ name in brackets
