@@ -1218,9 +1218,22 @@ async function fetchWfmuDataForArtists(artistList, progressCallback) {
                                 html = await response.text();
                             }
                             
-                            // Log a sample of the HTML to debug
+                            // Log HTML structure to debug
                             if (wfmuResults.length === 0) {
-                                console.log(`[WFMU Debug] HTML sample (first 1000 chars):`, html.substring(0, 1000));
+                                console.log(`[WFMU Debug] HTML sample (first 2000 chars):`, html.substring(0, 2000));
+                                // Try to find and log table structures
+                                const tempDoc = new DOMParser().parseFromString(html, 'text/html');
+                                const tables = tempDoc.querySelectorAll('table');
+                                console.log(`[WFMU Debug] Found ${tables.length} tables in HTML`);
+                                tables.forEach((table, idx) => {
+                                    const tbody = table.querySelector('tbody');
+                                    const rows = tbody ? tbody.querySelectorAll('tr') : table.querySelectorAll('tr');
+                                    const generalTextCount = table.querySelectorAll('.generaltext').length;
+                                    console.log(`[WFMU Debug] Table ${idx}: ${rows.length} rows, ${generalTextCount} .generaltext elements`);
+                                    if (rows.length > 0 && rows.length < 10) {
+                                        console.log(`[WFMU Debug] Table ${idx} first row HTML:`, rows[0].outerHTML.substring(0, 500));
+                                    }
+                                });
                             }
                             
                             const processed = processWfmuHtml(html, artistName, dateRange);
@@ -1299,6 +1312,22 @@ function processWfmuHtml(html, artistName, dateRange) {
     }
     
     console.log(`[WFMU Debug] Found results table with ${maxGeneralTextCount} .generaltext elements`);
+    
+    // Log structure of the target table if found
+    if (targetTable) {
+        const rows = targetTable.querySelectorAll('tbody tr');
+        console.log(`[WFMU Debug] Target table has ${rows.length} rows`);
+        if (rows.length > 0 && rows.length < 10) {
+            rows.forEach((row, idx) => {
+                const cells = row.querySelectorAll('td');
+                const generalTexts = row.querySelectorAll('.generaltext');
+                console.log(`[WFMU Debug] Target table row ${idx}: ${cells.length} cells, ${generalTexts.length} .generaltext elements`);
+                if (idx < 3) {
+                    console.log(`[WFMU Debug] Target table row ${idx} HTML:`, row.outerHTML.substring(0, 800));
+                }
+            });
+        }
+    }
     
     // If we found a target table, use its tbody rows
     let rows = [];
