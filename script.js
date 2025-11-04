@@ -978,12 +978,17 @@ async function fetchNprDataForArtists(artistList, stationId, apiKey, progressCal
             let baseUrl = `https://api.composer.nprstations.org/v1/stations/${station}`;
             
             // List of endpoint variations to try
+            // Note: The NPR Composer API structure is unclear - these are educated guesses
             const endpointVariations = [
                 { path: '/playlists', params: {} },
                 { path: '/plays', params: {} },
                 { path: '/recent-plays', params: {} },
                 { path: '/songs', params: {} },
-                { path: '', params: { type: 'playlist' } } // Try root with query param
+                { path: '/playlist', params: {} },
+                { path: '/play', params: {} },
+                { path: '', params: { type: 'playlist', format: 'json' } }, // Try root with query params
+                { path: '/api/playlists', params: {} }, // Maybe nested API path
+                { path: '/api/plays', params: {} }
             ];
             
             let url = null;
@@ -1021,7 +1026,13 @@ async function fetchNprDataForArtists(artistList, stationId, apiKey, progressCal
                     progressCallback(`Fetching ${station} data from ${endpoint.path || 'root'}...`);
                 }
                 
-                response = await fetch(url);
+                // Try with Accept header to request JSON
+                response = await fetch(url, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
                 
                 // Check content type first
                 const contentType = response.headers.get('content-type');
