@@ -1307,14 +1307,21 @@ function processWfmuHtml(html, artistName, dateRange) {
         console.log(`[WFMU Debug] Using table with ${rows.length} rows`);
     } else {
         // Fallback: try to find rows with .generaltext anywhere
-        const allRows = doc.querySelectorAll('tr');
-        rows = Array.from(allRows).filter(row => {
-            const cells = row.querySelectorAll('td');
-            return cells.length >= 5 && Array.from(cells).some(cell => 
-                cell.querySelector('.generaltext') || cell.classList.contains('generaltext')
-            );
-        });
-        console.log(`[WFMU Debug] Using fallback: found ${rows.length} rows with .generaltext`);
+        // Lower the threshold - maybe the results table has fewer than 5 elements per page
+        if (targetTable && maxGeneralTextCount > 0) {
+            console.log(`[WFMU Debug] Using table with ${maxGeneralTextCount} .generaltext elements (below threshold but has data)`);
+            rows = targetTable.querySelectorAll('tbody tr');
+        } else {
+            // Last resort: find rows with .generaltext anywhere
+            const allRows = doc.querySelectorAll('tr');
+            rows = Array.from(allRows).filter(row => {
+                const cells = row.querySelectorAll('td');
+                return cells.length >= 5 && Array.from(cells).some(cell => 
+                    cell.querySelector('.generaltext') || cell.classList.contains('generaltext')
+                );
+            });
+            console.log(`[WFMU Debug] Using fallback: found ${rows.length} rows with .generaltext`);
+        }
     }
     
     console.log(`[WFMU Debug] Processing ${rows.length} result rows`);
@@ -1422,7 +1429,21 @@ function processWfmuHtml(html, artistName, dateRange) {
                 endDate.setHours(23, 59, 59, 999);
                 
                 if (playDate < startDate || playDate > endDate) {
+                    if (index < 3) {
+                        console.log(`[WFMU Debug] Row ${index} date ${playDate.toISOString()} outside range ${startDate.toISOString()} to ${endDate.toISOString()}`);
+                    }
                     return;
+                }
+            } else if (index < 3) {
+                console.log(`[WFMU Debug] Row ${index} has no date - will include anyway`);
+            }
+            
+            // Log if artist match was fuzzy
+            if (index < 3) {
+                const playArtistLower = artist.toLowerCase();
+                const searchArtistLower = artistName.toLowerCase();
+                if (!playArtistLower.includes(searchArtistLower)) {
+                    console.log(`[WFMU Debug] Row ${index} artist match is fuzzy: "${artist}" vs "${artistName}"`);
                 }
             }
             
