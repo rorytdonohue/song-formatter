@@ -1245,16 +1245,16 @@ async function fetchWfmuDataForArtists(artistList, progressCallback) {
                 }
             }
             
-            if (!response.ok) {
-                console.warn(`[WFMU Debug] HTTP ${response.status} for ${artistName}`);
-                if (progressCallback) {
-                    progressCallback(`WFMU: HTTP ${response.status}. Artist may not exist.`);
+            // Only process direct response if we didn't use a proxy
+            if (!proxySuccess && response) {
+                if (!response.ok) {
+                    console.warn(`[WFMU Debug] HTTP ${response.status} for ${artistName}`);
+                    if (progressCallback) {
+                        progressCallback(`WFMU: HTTP ${response.status}. Artist may not exist.`);
+                    }
+                    continue;
                 }
-                continue;
-            }
-            
-            // Only read response if we haven't already (from proxy)
-            if (!proxySuccess) {
+                
                 const html = await response.text();
                 const processed = processWfmuHtml(html, artistName, dateRange);
                 console.log(`[WFMU Debug] Processed ${processed.length} plays for ${artistName}`);
