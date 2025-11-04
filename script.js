@@ -6,6 +6,7 @@ let spinitronMatches = []; // Spinitron data matches
 let onlineradioboxMatches = []; // Online Radio Box data matches
 let kexpMatches = []; // KEXP API data matches
 let kcrwMatches = []; // KCRW fmspins.com data matches
+let wfmuMatches = []; // WFMU data matches
 let tracklistDatabase = {}; // { artistName: [song1, song2, ...] }
 let trackVariants = {}; // { "artist|variantSong": "parentSong" } - maps variant tracks to their parent
 let currentResultFormat = 'table'; // Current display format
@@ -859,23 +860,13 @@ async function fetchKexpDataForArtists(artistList, progressCallback) {
                         }
                     }
                     
-                    // Format station name - prioritize DJ name in brackets
-                    let finalStationName = '';
+                    // Format station name - always use "KEXP [DJ Name]" format
+                    let finalStationName = 'KEXP';
                     if (djName) {
-                        // If we have both show name and DJ, show both
-                        if (stationName) {
-                            finalStationName = `${stationName} [${djName}]`;
-                        } else {
-                            // If only DJ name, just show it in brackets
-                            finalStationName = `[${djName}]`;
-                        }
-                    } else if (stationName) {
-                        // If only show name, use that
-                        finalStationName = stationName;
-                    } else {
-                        // Fallback to show ID
-                        finalStationName = `KEXP Show ${play.show}`;
+                        // Always format as "KEXP [DJ Name]" regardless of show name
+                        finalStationName = `KEXP [${djName}]`;
                     }
+                    // If no DJ name, just use "KEXP" (this should be rare)
                     
                     // Check if song is in tracklist database (if available)
                     const hasTracklist = Object.keys(tracklistDatabase).length > 0;
@@ -1137,6 +1128,238 @@ function processKcrwFmspinsHtml(html, artistName, dateRange) {
             }
         } catch (error) {
             console.error(`[KCRW Debug] Error processing play entry ${index}:`, error);
+        }
+    });
+    
+    return results;
+}
+
+// Fetch WFMU play history for one or more artists (helper function)
+// Returns array of matches with source: 'wfmu' flag
+async function fetchWfmuDataForArtists(artistList, progressCallback) {
+    const wfmuResults = [];
+    
+    // Get date range: last last Thursday to current previous Thursday (same as KEXP)
+    const dateRange = getKexpDateRange();
+    
+    for (const artistName of artistList) {
+        if (progressCallback) {
+            progressCallback(`Fetching WFMU play history for ${artistName}...`);
+        }
+        
+        try {
+            // URL format: https://wfmu.org/search.php?action=searchbasic&sinputs=...
+            // The sinputs parameter is a JSON-encoded array
+            // We need to encode the artist name properly
+            const encodedArtist = encodeURIComponent(artistName.toLowerCase());
+            
+            // Construct the search parameters
+            // Based on the example: ["or",{"Artist":"starts","Song title":"starts",...},null,{"Artist":"billy+bragg"},null,"355",5,"billy+bragg",null,null]
+            // Artist name should be lowercase with plus signs for spaces
+            const artistNameForUrl = artistName.toLowerCase().replace(/\s+/g, '+');
+            const searchParams = [
+                "or",
+                {
+                    "Artist": "starts",
+                    "Song title": "starts",
+                    "Album title": "starts",
+                    "Comments": "starts"
+                },
+                null,
+                {"Artist": artistNameForUrl},
+                null,
+                "355", // Not sure what this is, but it's in the example
+                5,     // Not sure what this is either
+                artistNameForUrl,
+                null,
+                null
+            ];
+            
+            // Encode the search params as JSON and then URL encode
+            const sinputs = encodeURIComponent(JSON.stringify(searchParams));
+            const url = `https://wfmu.org/search.php?action=searchbasic&sinputs=${sinputs}&page=0&sort=Playlist+links`;
+            
+            console.log(`[WFMU Debug] Fetching: ${url}`);
+            
+            // Try to fetch the page
+            let response;
+            try {
+                response = await fetch(url, {
+                    headers: {
+                        'Accept': 'text/html',
+                    }
+                });
+            } catch (corsError) {
+                console.error(`[WFMU Debug] CORS error - trying proxy:`, corsError);
+                if (progressCallback) {
+                    progressCallback(`WFMU: CORS blocked. Trying proxy...`);
+                }
+                // Try with a CORS proxy
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                response = await fetch(proxyUrl);
+                
+                if (response.ok) {
+                    const proxyData = await response.json();
+                    const html = proxyData.contents;
+                    const processed = processWfmuHtml(html, artistName, dateRange);
+                    wfmuResults.push(...processed);
+                    console.log(`[WFMU Debug] Processed ${processed.length} plays from proxy`);
+                    continue;
+                }
+            }
+            
+            if (!response.ok) {
+                console.warn(`[WFMU Debug] HTTP ${response.status} for ${artistName}`);
+                if (progressCallback) {
+                    progressCallback(`WFMU: HTTP ${response.status}. Artist may not exist.`);
+                }
+                continue;
+            }
+            
+            const html = await response.text();
+            const processed = processWfmuHtml(html, artistName, dateRange);
+            console.log(`[WFMU Debug] Processed ${processed.length} plays for ${artistName}`);
+            wfmuResults.push(...processed);
+            
+        } catch (error) {
+            console.error(`[WFMU Debug] Error fetching WFMU data for ${artistName}:`, error);
+            if (progressCallback) {
+                progressCallback(`Error: ${error.message}`);
+            }
+        }
+    }
+    
+    return wfmuResults;
+}
+
+// Process WFMU HTML and extract playlist data
+function processWfmuHtml(html, artistName, dateRange) {
+    const results = [];
+    
+    // Create a temporary DOM element to parse HTML
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    
+    // Find all table rows in the tbody (skip header row)
+    const rows = doc.querySelectorAll('tbody tr');
+    
+    console.log(`[WFMU Debug] Found ${rows.length} rows in HTML`);
+    
+    rows.forEach((row, index) => {
+        try {
+            // Skip header row (has th elements)
+            if (row.querySelector('th')) {
+                return;
+            }
+            
+            // Extract data from table cells
+            const cells = row.querySelectorAll('td');
+            if (cells.length < 5) {
+                if (index < 3) {
+                    console.log(`[WFMU Debug] Row ${index} has ${cells.length} cells, expected 5`);
+                }
+                return;
+            }
+            
+            // Column 0: Artist
+            const artistCell = cells[0];
+            const artist = artistCell ? artistCell.textContent.trim() : '';
+            
+            // Column 1: Song
+            const songCell = cells[1];
+            const song = songCell ? songCell.textContent.trim() : '';
+            
+            // Column 3: Program (DJ/Show name)
+            const programCell = cells[3];
+            const program = programCell ? programCell.textContent.trim() : '';
+            
+            // Column 4: Date link
+            const dateCell = cells[4];
+            let playDate = null;
+            if (dateCell) {
+                const dateLink = dateCell.querySelector('a');
+                if (dateLink) {
+                    const dateText = dateLink.textContent.trim();
+                    // Date format: "Oct 23 2025" or "Sep 29 2025"
+                    const dateMatch = dateText.match(/([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})/);
+                    if (dateMatch) {
+                        const [, month, day, year] = dateMatch;
+                        const monthMap = {
+                            'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+                            'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+                            'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+                        };
+                        const monthNum = monthMap[month] || '01';
+                        playDate = new Date(`${year}-${monthNum}-${day.padStart(2, '0')}`);
+                    }
+                }
+            }
+            
+            if (!song || !artist) {
+                if (index < 3) {
+                    console.log(`[WFMU Debug] Missing song/artist in row ${index}`);
+                }
+                return;
+            }
+            
+            // Filter by artist (case-insensitive, fuzzy)
+            const playArtistLower = artist.toLowerCase();
+            const searchArtistLower = artistName.toLowerCase();
+            if (!playArtistLower.includes(searchArtistLower) && 
+                similarityRatio(playArtistLower, searchArtistLower) < FUZZY_THRESHOLD) {
+                const normalizedPlayArtist = normalizeText(artist);
+                const normalizedSearchArtist = normalizeText(artistName);
+                if (similarityRatio(normalizedPlayArtist, normalizedSearchArtist) < FUZZY_THRESHOLD) {
+                    return;
+                }
+            }
+            
+            // Filter by date range
+            if (playDate) {
+                const startDate = new Date(dateRange.start);
+                const endDate = new Date(dateRange.end);
+                endDate.setHours(23, 59, 59, 999);
+                
+                if (playDate < startDate || playDate > endDate) {
+                    return;
+                }
+            }
+            
+            // Format station name with program/DJ
+            let finalStationName = 'WFMU';
+            if (program) {
+                finalStationName = `WFMU [${program}]`;
+            }
+            
+            // Check if song is in tracklist database
+            const hasTracklist = Object.keys(tracklistDatabase).length > 0;
+            if (hasTracklist) {
+                const tlMatch = matchTracklistFuzzy(artist, song);
+                if (tlMatch.ok) {
+                    results.push({
+                        station: finalStationName,
+                        artist: tlMatch.artist,
+                        song: tlMatch.song,
+                        source: 'wfmu'
+                    });
+                } else {
+                    results.push({
+                        station: finalStationName,
+                        artist: artist,
+                        song: song,
+                        source: 'wfmu'
+                    });
+                }
+            } else {
+                results.push({
+                    station: finalStationName,
+                    artist: artist,
+                    song: song,
+                    source: 'wfmu'
+                });
+            }
+        } catch (error) {
+            console.error(`[WFMU Debug] Error processing row ${index}:`, error);
         }
     });
     
@@ -2141,20 +2364,23 @@ function displaySpingridFormat(matches, containerId) {
     const spinCounts = {};
     const kexpStationInfo = {}; // Track KEXP stations: { artist: { song: [{ station, count }] } }
     const kcrwStationInfo = {}; // Track KCRW stations: { artist: { song: [{ station, count }] } }
+    const wfmuStationInfo = {}; // Track WFMU stations: { artist: { song: [{ station, count }] } }
     
     matches.forEach(match => {
         if (!spinCounts[match.artist]) {
             spinCounts[match.artist] = {};
             kexpStationInfo[match.artist] = {};
             kcrwStationInfo[match.artist] = {};
+            wfmuStationInfo[match.artist] = {};
         }
         if (!spinCounts[match.artist][match.song]) {
             spinCounts[match.artist][match.song] = {};
             kexpStationInfo[match.artist][match.song] = [];
             kcrwStationInfo[match.artist][match.song] = [];
+            wfmuStationInfo[match.artist][match.song] = [];
         }
         
-        // Track KEXP and KCRW matches separately for special formatting
+        // Track KEXP, KCRW, and WFMU matches separately for special formatting
         if (match.source === 'kexp') {
             kexpStationInfo[match.artist][match.song].push({
                 station: match.station,
@@ -2165,8 +2391,13 @@ function displaySpingridFormat(matches, containerId) {
                 station: match.station,
                 count: 1
             });
+        } else if (match.source === 'wfmu') {
+            wfmuStationInfo[match.artist][match.song].push({
+                station: match.station,
+                count: 1
+            });
         } else {
-            // Non-KEXP/KCRW stations use normal counting
+            // Non-KEXP/KCRW/WFMU stations use normal counting
         if (!spinCounts[match.artist][match.song][match.station]) {
             spinCounts[match.artist][match.song][match.station] = 0;
         }
@@ -2244,6 +2475,43 @@ function displaySpingridFormat(matches, containerId) {
                     spinCounts[artist][song] = {};
                 }
                 spinCounts[artist][song][kcrwStationName] = totalKcrwCount;
+            }
+        });
+    });
+    
+    // Aggregate WFMU stations and format them as "WFMU (count) [Program1][Program2]"
+    Object.keys(wfmuStationInfo).forEach(artist => {
+        Object.keys(wfmuStationInfo[artist]).forEach(song => {
+            const wfmuStations = wfmuStationInfo[artist][song];
+            if (wfmuStations.length > 0) {
+                // Aggregate WFMU stations: extract program names and count total
+                const programNamesSet = new Set();
+                let totalWfmuCount = 0;
+                
+                wfmuStations.forEach(({ station, count }) => {
+                    totalWfmuCount += count;
+                    // Extract program names from brackets: "[Program Name]"
+                    const bracketMatches = station.match(/\[([^\]]+)\]/g);
+                    if (bracketMatches) {
+                        bracketMatches.forEach(bracket => {
+                            // Remove brackets and add program name
+                            const programName = bracket.replace(/[\[\]]/g, '');
+                            if (programName) {
+                                programNamesSet.add(programName);
+                            }
+                        });
+                    }
+                });
+                
+                // Format as "WFMU (count) [Program1][Program2][Program3]"
+                const programNames = Array.from(programNamesSet).sort();
+                const wfmuStationName = `WFMU (${totalWfmuCount}) ${programNames.map(prog => `[${prog}]`).join('')}`;
+                
+                // Add to spinCounts
+                if (!spinCounts[artist][song]) {
+                    spinCounts[artist][song] = {};
+                }
+                spinCounts[artist][song][wfmuStationName] = totalWfmuCount;
             }
         });
     });
@@ -2588,6 +2856,43 @@ function displaySpingridFormatInContainer(matches, container) {
                     spinCounts[artist][normalizedSong] = {};
                 }
                 spinCounts[artist][normalizedSong][kcrwStationName] = totalKcrwCount;
+            }
+        });
+    });
+    
+    // Aggregate WFMU stations and format them as "WFMU (count) [Program1][Program2]"
+    Object.keys(wfmuStationInfo).forEach(artist => {
+        Object.keys(wfmuStationInfo[artist]).forEach(normalizedSong => {
+            const wfmuStations = wfmuStationInfo[artist][normalizedSong];
+            if (wfmuStations.length > 0) {
+                // Aggregate WFMU stations: extract program names and count total
+                const programNamesSet = new Set();
+                let totalWfmuCount = 0;
+                
+                wfmuStations.forEach(({ station, count }) => {
+                    totalWfmuCount += count;
+                    // Extract program names from brackets: "[Program Name]"
+                    const bracketMatches = station.match(/\[([^\]]+)\]/g);
+                    if (bracketMatches) {
+                        bracketMatches.forEach(bracket => {
+                            // Remove brackets and add program name
+                            const programName = bracket.replace(/[\[\]]/g, '');
+                            if (programName) {
+                                programNamesSet.add(programName);
+                            }
+                        });
+                    }
+                });
+                
+                // Format as "WFMU (count) [Program1][Program2][Program3]"
+                const programNames = Array.from(programNamesSet).sort();
+                const wfmuStationName = `WFMU (${totalWfmuCount}) ${programNames.map(prog => `[${prog}]`).join('')}`;
+                
+                // Add to spinCounts
+                if (!spinCounts[artist][normalizedSong]) {
+                    spinCounts[artist][normalizedSong] = {};
+                }
+                spinCounts[artist][normalizedSong][wfmuStationName] = totalWfmuCount;
             }
         });
     });
@@ -3340,10 +3645,18 @@ async function findMatches() {
         }).catch(error => {
             console.error('[KCRW Debug] Error fetching KCRW data:', error);
             return [];
+        }),
+        // Try to fetch WFMU data (scraping)
+        fetchWfmuDataForArtists(artistList, (msg) => {
+            // Silently fetch WFMU in background
+            console.log(`[WFMU Debug] ${msg}`);
+        }).catch(error => {
+            console.error('[WFMU Debug] Error fetching WFMU data:', error);
+            return [];
         })
-    ]).then(([kexpResults, kcrwResults]) => {
-        // Merge KEXP and KCRW results with Online Radio Box matches
-        matches = [...matches, ...kexpResults, ...kcrwResults];
+    ]).then(([kexpResults, kcrwResults, wfmuResults]) => {
+        // Merge KEXP, KCRW, and WFMU results with Online Radio Box matches
+        matches = [...matches, ...kexpResults, ...kcrwResults, ...wfmuResults];
         
         // Re-sort combined results
         matches = sortMatchesByArtistOrder(matches, artistList);
@@ -3354,11 +3667,13 @@ async function findMatches() {
         // Update summary
         const kexpCount = kexpResults.length;
         const kcrwCount = kcrwResults.length;
-        const orbCount = matches.length - kexpCount - kcrwCount;
+        const wfmuCount = wfmuResults.length;
+        const orbCount = matches.length - kexpCount - kcrwCount - wfmuCount;
         let summaryText = `${orbCount} Online Radio Box matches across ${summary.sheetsScanned} sheets (${summary.rowsScanned} rows scanned).`;
         if (kexpCount > 0) summaryText += ` ${kexpCount} KEXP matches.`;
         if (kcrwCount > 0) summaryText += ` ${kcrwCount} KCRW matches.`;
-        if (kexpCount === 0 && kcrwCount === 0) summaryText += ' No KEXP or KCRW matches found.';
+        if (wfmuCount > 0) summaryText += ` ${wfmuCount} WFMU matches.`;
+        if (kexpCount === 0 && kcrwCount === 0 && wfmuCount === 0) summaryText += ' No KEXP, KCRW, or WFMU matches found.';
         summaryEl.textContent = summaryText;
     }).catch(error => {
         console.error('Error fetching API data:', error);
@@ -3481,11 +3796,13 @@ function displayTableFormat(matches) {
     matches.forEach((match, index) => {
         const row = document.createElement('tr');
         
-        // Highlight KEXP results in green, KCRW results in blue
+        // Highlight KEXP results in green, KCRW results in blue, WFMU results in purple
         if (match.source === 'kexp') {
             row.style.backgroundColor = '#e6f7e6'; // Light green background
         } else if (match.source === 'kcrw') {
             row.style.backgroundColor = '#e6f0ff'; // Light blue background
+        } else if (match.source === 'wfmu') {
+            row.style.backgroundColor = '#f0e6ff'; // Light purple background
         }
 
         // Check if this track is a variant (case-insensitive matching)
@@ -3710,6 +4027,43 @@ function displaySpingridFormat(matches) {
                     spinCounts[artist][normalizedSong] = {};
                 }
                 spinCounts[artist][normalizedSong][kcrwStationName] = totalKcrwCount;
+            }
+        });
+    });
+    
+    // Aggregate WFMU stations and format them as "WFMU (count) [Program1][Program2]"
+    Object.keys(wfmuStationInfo).forEach(artist => {
+        Object.keys(wfmuStationInfo[artist]).forEach(normalizedSong => {
+            const wfmuStations = wfmuStationInfo[artist][normalizedSong];
+            if (wfmuStations.length > 0) {
+                // Aggregate WFMU stations: extract program names and count total
+                const programNamesSet = new Set();
+                let totalWfmuCount = 0;
+                
+                wfmuStations.forEach(({ station, count }) => {
+                    totalWfmuCount += count;
+                    // Extract program names from brackets: "[Program Name]"
+                    const bracketMatches = station.match(/\[([^\]]+)\]/g);
+                    if (bracketMatches) {
+                        bracketMatches.forEach(bracket => {
+                            // Remove brackets and add program name
+                            const programName = bracket.replace(/[\[\]]/g, '');
+                            if (programName) {
+                                programNamesSet.add(programName);
+                            }
+                        });
+                    }
+                });
+                
+                // Format as "WFMU (count) [Program1][Program2][Program3]"
+                const programNames = Array.from(programNamesSet).sort();
+                const wfmuStationName = `WFMU (${totalWfmuCount}) ${programNames.map(prog => `[${prog}]`).join('')}`;
+                
+                // Add to spinCounts
+                if (!spinCounts[artist][normalizedSong]) {
+                    spinCounts[artist][normalizedSong] = {};
+                }
+                spinCounts[artist][normalizedSong][wfmuStationName] = totalWfmuCount;
             }
         });
     });
