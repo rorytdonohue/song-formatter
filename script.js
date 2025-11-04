@@ -1253,10 +1253,13 @@ async function fetchWfmuDataForArtists(artistList, progressCallback) {
                 continue;
             }
             
-            const html = await response.text();
-            const processed = processWfmuHtml(html, artistName, dateRange);
-            console.log(`[WFMU Debug] Processed ${processed.length} plays for ${artistName}`);
-            wfmuResults.push(...processed);
+            // Only read response if we haven't already (from proxy)
+            if (!proxySuccess) {
+                const html = await response.text();
+                const processed = processWfmuHtml(html, artistName, dateRange);
+                console.log(`[WFMU Debug] Processed ${processed.length} plays for ${artistName}`);
+                wfmuResults.push(...processed);
+            }
             
         } catch (error) {
             console.error(`[WFMU Debug] Error fetching WFMU data for ${artistName}:`, error);
@@ -1277,23 +1280,40 @@ function processWfmuHtml(html, artistName, dateRange) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
     
-    // Find all table rows - try multiple selectors
-    let rows = doc.querySelectorAll('tbody tr');
-    if (rows.length === 0) {
-        // Try without tbody
-        rows = doc.querySelectorAll('table tr');
-    }
-    if (rows.length === 0) {
-        // Try any tr
-        rows = doc.querySelectorAll('tr');
+    // Find the table that contains the actual results
+    // Look for a table with tbody containing rows with .generaltext spans
+    let targetTable = null;
+    const allTables = doc.querySelectorAll('table');
+    
+    for (const table of allTables) {
+        const tbody = table.querySelector('tbody');
+        if (tbody) {
+            const rowsWithGeneralText = tbody.querySelectorAll('tr td .generaltext');
+            if (rowsWithGeneralText.length > 0) {
+                targetTable = table;
+                console.log(`[WFMU Debug] Found results table with ${rowsWithGeneralText.length} .generaltext elements`);
+                break;
+            }
+        }
     }
     
-    console.log(`[WFMU Debug] Found ${rows.length} rows in HTML`);
-    
-    // Log first few rows to debug structure
-    if (rows.length > 0) {
-        console.log(`[WFMU Debug] First row HTML sample:`, rows[0].outerHTML.substring(0, 300));
+    // If we found a target table, use its tbody rows
+    let rows = [];
+    if (targetTable) {
+        rows = targetTable.querySelectorAll('tbody tr');
+    } else {
+        // Fallback: try to find rows with .generaltext anywhere
+        const allRows = doc.querySelectorAll('tr');
+        rows = Array.from(allRows).filter(row => {
+            const cells = row.querySelectorAll('td');
+            return cells.length >= 5 && Array.from(cells).some(cell => 
+                cell.querySelector('.generaltext') || cell.classList.contains('generaltext')
+            );
+        });
+        console.log(`[WFMU Debug] Using fallback: found ${rows.length} rows with .generaltext`);
     }
+    
+    console.log(`[WFMU Debug] Processing ${rows.length} result rows`);
     
     rows.forEach((row, index) => {
         try {
@@ -1305,20 +1325,15 @@ function processWfmuHtml(html, artistName, dateRange) {
             // Extract data from table cells
             const cells = row.querySelectorAll('td');
             if (cells.length < 5) {
-                if (index < 5) {
-                    console.log(`[WFMU Debug] Row ${index} has ${cells.length} cells, expected 5. HTML:`, row.outerHTML.substring(0, 200));
-                }
-                return;
+                return; // Skip rows without enough cells
             }
             
-            // Skip rows that might be in nested tables or other structures
-            // Check if this row is actually in the main results table
+            // Check if this row has .generaltext (the actual data rows)
             const hasGeneralText = Array.from(cells).some(cell => 
                 cell.querySelector('.generaltext') || cell.classList.contains('generaltext')
             );
-            if (!hasGeneralText && index < 5) {
-                console.log(`[WFMU Debug] Row ${index} doesn't have .generaltext class, skipping`);
-                return;
+            if (!hasGeneralText) {
+                return; // Skip rows without .generaltext
             }
             
             // Column 0: Artist (look for .generaltext span)
