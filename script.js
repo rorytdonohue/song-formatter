@@ -3811,14 +3811,15 @@ async function findMatches() {
             console.error('[KCRW Debug] Error fetching KCRW data:', error);
             return [];
         }),
-        // Try to fetch WFMU data (scraping)
-        fetchWfmuDataForArtists(artistList, (msg) => {
-            // Silently fetch WFMU in background
-            console.log(`[WFMU Debug] ${msg}`);
-        }).catch(error => {
-            console.error('[WFMU Debug] Error fetching WFMU data:', error);
-            return [];
-        })
+        // Try to fetch WFMU data (scraping) - disabled for now due to search blocking
+        // fetchWfmuDataForArtists(artistList, (msg) => {
+        //     // Silently fetch WFMU in background
+        //     console.log(`[WFMU Debug] ${msg}`);
+        // }).catch(error => {
+        //     console.error('[WFMU Debug] Error fetching WFMU data:', error);
+        //     return [];
+        // })
+        Promise.resolve([]) // Return empty array for WFMU (disabled)
     ]).then(([kexpResults, kcrwResults, wfmuResults]) => {
         // Merge KEXP, KCRW, and WFMU results with Online Radio Box matches
         matches = [...matches, ...kexpResults, ...kcrwResults, ...wfmuResults];
@@ -3832,13 +3833,13 @@ async function findMatches() {
         // Update summary
         const kexpCount = kexpResults.length;
         const kcrwCount = kcrwResults.length;
-        const wfmuCount = wfmuResults.length;
+        const wfmuCount = wfmuResults ? wfmuResults.length : 0; // WFMU disabled for now
         const orbCount = matches.length - kexpCount - kcrwCount - wfmuCount;
         let summaryText = `${orbCount} Online Radio Box matches across ${summary.sheetsScanned} sheets (${summary.rowsScanned} rows scanned).`;
         if (kexpCount > 0) summaryText += ` ${kexpCount} KEXP matches.`;
         if (kcrwCount > 0) summaryText += ` ${kcrwCount} KCRW matches.`;
-        if (wfmuCount > 0) summaryText += ` ${wfmuCount} WFMU matches.`;
-        if (kexpCount === 0 && kcrwCount === 0 && wfmuCount === 0) summaryText += ' No KEXP, KCRW, or WFMU matches found.';
+        // WFMU disabled for now - not showing in summary
+        if (kexpCount === 0 && kcrwCount === 0) summaryText += ' No KEXP or KCRW matches found.';
         summaryEl.textContent = summaryText;
     }).catch(error => {
         console.error('Error fetching API data:', error);
@@ -4063,6 +4064,11 @@ function displayStationFormat(matches) {
 function displaySpingridFormat(matches) {
     const spingridResultsBody = document.getElementById('spingridResultsBody');
     
+    if (!spingridResultsBody) {
+        console.error('[Spingrid Debug] spingridResultsBody element not found');
+        return;
+    }
+    
     // Get the artist list from the input
     const rawArtists = document.getElementById('artistNames').value || '';
     const artistList = rawArtists
@@ -4081,6 +4087,7 @@ function displaySpingridFormat(matches) {
     const songNameMap = {}; // Maps normalized key -> original song name (for display)
     const kexpStationInfo = {}; // Track KEXP stations: { artist: { normalizedSong: [{ station, count }] } }
     const kcrwStationInfo = {}; // Track KCRW stations: { artist: { normalizedSong: [{ station, count }] } }
+    const wfmuStationInfo = {}; // Track WFMU stations: { artist: { normalizedSong: [{ station, count }] } }
     
     matches.forEach(match => {
         if (!spinCounts[match.artist]) {
@@ -4088,6 +4095,7 @@ function displaySpingridFormat(matches) {
             songNameMap[match.artist] = {};
             kexpStationInfo[match.artist] = {};
             kcrwStationInfo[match.artist] = {};
+            wfmuStationInfo[match.artist] = {};
         }
         
         // Normalize song name for grouping (case-insensitive)
@@ -4100,9 +4108,10 @@ function displaySpingridFormat(matches) {
             songNameMap[match.artist][normalizedSong] = match.song;
             kexpStationInfo[match.artist][normalizedSong] = [];
             kcrwStationInfo[match.artist][normalizedSong] = [];
+            wfmuStationInfo[match.artist][normalizedSong] = [];
         }
         
-        // Track KEXP and KCRW matches separately for special formatting
+        // Track KEXP, KCRW, and WFMU matches separately for special formatting
         if (match.source === 'kexp') {
             kexpStationInfo[match.artist][normalizedSong].push({
                 station: match.station,
@@ -4113,11 +4122,16 @@ function displaySpingridFormat(matches) {
                 station: match.station,
                 count: 1
             });
+        } else if (match.source === 'wfmu') {
+            wfmuStationInfo[match.artist][normalizedSong].push({
+                station: match.station,
+                count: 1
+            });
         } else {
-            // Non-KEXP/KCRW stations use normal counting
+            // Non-KEXP/KCRW/WFMU stations use normal counting
             if (!spinCounts[match.artist][normalizedSong][match.station]) {
                 spinCounts[match.artist][normalizedSong][match.station] = 0;
-        }
+            }
             spinCounts[match.artist][normalizedSong][match.station]++;
         }
     });
@@ -4462,7 +4476,16 @@ function displaySpingridFormat(matches) {
         html += `</div>`;
     });
     
-    spingridResultsBody.innerHTML = html;
+    console.log('[Spingrid Debug] Generated HTML length:', html.length);
+    console.log('[Spingrid Debug] Number of artists processed:', artistList.length);
+    console.log('[Spingrid Debug] Total matches:', matches.length);
+    
+    if (!html || html.trim() === '') {
+        console.warn('[Spingrid Debug] HTML is empty, setting default message');
+        spingridResultsBody.innerHTML = '<p style="text-align: center; color: #718096;">No data to display.</p>';
+    } else {
+        spingridResultsBody.innerHTML = html;
+    }
 }
 
 // Copy spingrid format data for Excel
