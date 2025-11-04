@@ -1549,11 +1549,13 @@ function displaySpingridFormatInContainer(matches, container) {
     // Use normalized song names as keys to handle case variations (e.g., "This is" vs "This Is")
     const spinCounts = {};
     const songNameMap = {}; // Maps normalized key -> original song name (for display)
+    const kexpStationInfo = {}; // Track KEXP stations: { artist: { normalizedSong: [{ station, count }] } }
     
     matches.forEach(match => {
         if (!spinCounts[match.artist]) {
             spinCounts[match.artist] = {};
             songNameMap[match.artist] = {};
+            kexpStationInfo[match.artist] = {};
         }
         
         // Normalize song name for grouping (case-insensitive)
@@ -1564,12 +1566,59 @@ function displaySpingridFormatInContainer(matches, container) {
         if (!spinCounts[match.artist][normalizedSong]) {
             spinCounts[match.artist][normalizedSong] = {};
             songNameMap[match.artist][normalizedSong] = match.song;
+            kexpStationInfo[match.artist][normalizedSong] = [];
         }
         
-        if (!spinCounts[match.artist][normalizedSong][match.station]) {
-            spinCounts[match.artist][normalizedSong][match.station] = 0;
+        // Track KEXP matches separately for special formatting
+        if (match.source === 'kexp') {
+            kexpStationInfo[match.artist][normalizedSong].push({
+                station: match.station,
+                count: 1
+            });
+        } else {
+            // Non-KEXP stations use normal counting
+            if (!spinCounts[match.artist][normalizedSong][match.station]) {
+                spinCounts[match.artist][normalizedSong][match.station] = 0;
+            }
+            spinCounts[match.artist][normalizedSong][match.station]++;
         }
-        spinCounts[match.artist][normalizedSong][match.station]++;
+    });
+    
+    // Aggregate KEXP stations and format them as "KEXP (count) [DJ1][DJ2]"
+    Object.keys(kexpStationInfo).forEach(artist => {
+        Object.keys(kexpStationInfo[artist]).forEach(normalizedSong => {
+            const kexpStations = kexpStationInfo[artist][normalizedSong];
+            if (kexpStations.length > 0) {
+                // Aggregate KEXP stations: extract DJ names and count total
+                const djNamesSet = new Set();
+                let totalKexpCount = 0;
+                
+                kexpStations.forEach(({ station, count }) => {
+                    totalKexpCount += count;
+                    // Extract DJ names from brackets: "[DJ Name]" or "Show Name [DJ Name]"
+                    const bracketMatches = station.match(/\[([^\]]+)\]/g);
+                    if (bracketMatches) {
+                        bracketMatches.forEach(bracket => {
+                            // Remove brackets and add DJ name
+                            const djName = bracket.replace(/[\[\]]/g, '');
+                            if (djName) {
+                                djNamesSet.add(djName);
+                            }
+                        });
+                    }
+                });
+                
+                // Format as "KEXP (count) [DJ1][DJ2][DJ3]"
+                const djNames = Array.from(djNamesSet).sort();
+                const kexpStationName = `KEXP (${totalKexpCount}) ${djNames.map(dj => `[${dj}]`).join('')}`;
+                
+                // Add to spinCounts
+                if (!spinCounts[artist][normalizedSong]) {
+                    spinCounts[artist][normalizedSong] = {};
+                }
+                spinCounts[artist][normalizedSong][kexpStationName] = totalKexpCount;
+            }
+        });
     });
     
     let html = '';
