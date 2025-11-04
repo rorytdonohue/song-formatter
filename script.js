@@ -1280,26 +1280,31 @@ function processWfmuHtml(html, artistName, dateRange) {
     const doc = parser.parseFromString(html, 'text/html');
     
     // Find the table that contains the actual results
-    // Look for a table with tbody containing rows with .generaltext spans
+    // Look for a table with tbody containing many rows with .generaltext spans (actual data rows)
     let targetTable = null;
+    let maxGeneralTextCount = 0;
     const allTables = doc.querySelectorAll('table');
     
+    // Find the table with the most .generaltext elements (likely the results table)
     for (const table of allTables) {
         const tbody = table.querySelector('tbody');
         if (tbody) {
             const rowsWithGeneralText = tbody.querySelectorAll('tr td .generaltext');
-            if (rowsWithGeneralText.length > 0) {
+            const count = rowsWithGeneralText.length;
+            if (count > maxGeneralTextCount) {
+                maxGeneralTextCount = count;
                 targetTable = table;
-                console.log(`[WFMU Debug] Found results table with ${rowsWithGeneralText.length} .generaltext elements`);
-                break;
             }
         }
     }
     
+    console.log(`[WFMU Debug] Found results table with ${maxGeneralTextCount} .generaltext elements`);
+    
     // If we found a target table, use its tbody rows
     let rows = [];
-    if (targetTable) {
+    if (targetTable && maxGeneralTextCount > 5) { // Only use if we found a table with many results
         rows = targetTable.querySelectorAll('tbody tr');
+        console.log(`[WFMU Debug] Using table with ${rows.length} rows`);
     } else {
         // Fallback: try to find rows with .generaltext anywhere
         const allRows = doc.querySelectorAll('tr');
@@ -1386,10 +1391,16 @@ function processWfmuHtml(html, artistName, dateRange) {
             }
             
             if (!song || !artist) {
-                if (index < 3) {
-                    console.log(`[WFMU Debug] Missing song/artist in row ${index}`);
+                if (index < 5) {
+                    console.log(`[WFMU Debug] Row ${index} - Missing song/artist. Artist: "${artist}", Song: "${song}"`);
+                    console.log(`[WFMU Debug] Row ${index} HTML:`, row.outerHTML.substring(0, 500));
                 }
                 return;
+            }
+            
+            // Log first few successful extractions for debugging
+            if (index < 3) {
+                console.log(`[WFMU Debug] Row ${index} extracted - Artist: "${artist}", Song: "${song}", Program: "${program}", Date: ${playDate ? playDate.toISOString() : 'none'}`);
             }
             
             // Filter by artist (case-insensitive, fuzzy)
