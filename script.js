@@ -6,6 +6,7 @@ let spinitronMatches = []; // Spinitron data matches
 let onlineradioboxMatches = []; // Online Radio Box data matches
 let tracklistDatabase = {}; // { artistName: [song1, song2, ...] }
 let trackVariants = {}; // { "artist|variantSong": "parentSong" } - maps variant tracks to their parent
+let coreStations = []; // Array of core station names (will be bolded in spingrids)
 let currentResultFormat = 'table'; // Current display format
 const FUZZY_THRESHOLD = 0.85; // 85% similarity for fuzzy matching
 
@@ -28,7 +29,9 @@ const wisdomQuotes = [
     { text: "The superior man understands what is right; the inferior man understands what will sell.", author: "Confucius" },
     { text: "Real knowledge is to know the extent of one's ignorance.", author: "Confucius" },
     { text: "The way out is through the door. Why is it that no one will use this method?", author: "Confucius" },
-    { text: "The music business is a cruel and shallow money trench, a long plastic hallway where thieves and pimps run free, and good men die like dogs. There's also a negative side.", author: "Hunter S. Thompson" }
+    { text: "The music business is a cruel and shallow money trench, a long plastic hallway where thieves and pimps run free, and good men die like dogs. There's also a negative side.", author: "Hunter S. Thompson" },
+    { text: "You can whistle and steam can whistle, so why do you sing in the shower? Acoustics.", author: "Maureen Nevin of Asbury Radio" },
+    { text: "the squeaky candle gets burnt at both ends -- with oil.", author: "Sam" }
 ];
 
 // Initialize the application
@@ -60,6 +63,8 @@ function initializeApp() {
     loadTracklistDatabase();
     // Load track variants
     loadTrackVariants();
+    // Load core stations
+    loadCoreStations();
     // Display current tracklists
     displayTracklists();
 }
@@ -1045,11 +1050,9 @@ function displaySpingridFormatInContainer(matches, container) {
             Object.keys(parentGroups).forEach(parentSong => {
                 const group = parentGroups[parentSong];
                 const totalCount = Object.values(group.spins).reduce((sum, count) => sum + count, 0);
-                const stationList = Object.entries(group.spins)
-                    .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
-                    .join(', ');
+                const stationList = totalCount > 0 ? formatStationList(Object.entries(group.spins)) : '';
                 
-                html += `<div class="song-count-entry parent-track"><span class="song-name-cell">${escapeHtml(parentSong)}</span><span class="count-cell">${totalCount > 0 ? totalCount : ''}</span><span class="station-cell">${totalCount > 0 ? escapeHtml(stationList) : ''}</span></div>`;
+                html += `<div class="song-count-entry parent-track"><span class="song-name-cell">${escapeHtml(parentSong)}</span><span class="count-cell">${totalCount > 0 ? totalCount : ''}</span><span class="station-cell">${stationList}</span></div>`;
                 
                 if (group.variants.length > 0) {
                     group.variants.forEach(variantSong => {
@@ -1058,11 +1061,9 @@ function displaySpingridFormatInContainer(matches, container) {
                         const matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
                         const variantSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedVariant];
                         const variantCount = variantSpins ? Object.values(variantSpins).reduce((sum, count) => sum + count, 0) : 0;
-                        const variantStationList = variantSpins ? Object.entries(variantSpins)
-                            .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
-                            .join(', ') : '';
+                        const variantStationList = variantSpins && variantCount > 0 ? formatStationList(Object.entries(variantSpins)) : '';
                         
-                        html += `<div class="song-count-entry variant-track"><span class="song-name-cell" style="padding-left: 20px; color: #718096;">→ ${escapeHtml(variantSong)}</span><span class="count-cell">${variantCount > 0 ? variantCount : ''}</span><span class="station-cell">${variantCount > 0 ? escapeHtml(variantStationList) : ''}</span></div>`;
+                        html += `<div class="song-count-entry variant-track"><span class="song-name-cell" style="padding-left: 20px; color: #718096;">→ ${escapeHtml(variantSong)}</span><span class="count-cell">${variantCount > 0 ? variantCount : ''}</span><span class="station-cell">${variantStationList}</span></div>`;
                     });
                 }
             });
@@ -1098,11 +1099,9 @@ function displaySpingridFormatInContainer(matches, container) {
                 const totalCount = Object.values(aggregatedSpins).reduce((sum, count) => sum + count, 0);
                 
                 if (totalCount > 0) {
-                    const stationList = Object.entries(aggregatedSpins)
-                        .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
-                        .join(', ');
+                    const stationList = formatStationList(Object.entries(aggregatedSpins));
                     
-                    html += `<div class="song-count-entry"><span class="song-name-cell">${escapeHtml(group.displayName)}</span><span class="count-cell">${totalCount}</span><span class="station-cell">${escapeHtml(stationList)}</span></div>`;
+                    html += `<div class="song-count-entry"><span class="song-name-cell">${escapeHtml(group.displayName)}</span><span class="count-cell">${totalCount}</span><span class="station-cell">${stationList}</span></div>`;
                 } else {
                     html += `<div class="song-count-entry"><span class="song-name-cell">${escapeHtml(group.displayName)}</span><span class="count-cell"></span><span class="station-cell"></span></div>`;
                 }
@@ -2021,15 +2020,13 @@ function displaySpingridFormat(matches) {
             Object.keys(parentGroups).forEach(parentSong => {
                 const group = parentGroups[parentSong];
                 const totalCount = Object.values(group.spins).reduce((sum, count) => sum + count, 0);
-                const stationList = Object.entries(group.spins)
-                    .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
-                    .join(', ');
+                const stationList = totalCount > 0 ? formatStationList(Object.entries(group.spins)) : '';
                 
                 // Show parent track
                 html += `<div class="song-count-entry parent-track">`;
                 html += `<span class="song-name-cell">${escapeHtml(parentSong)}</span>`;
                 html += `<span class="count-cell">${totalCount > 0 ? totalCount : ''}</span>`;
-                html += `<span class="station-cell">${totalCount > 0 ? escapeHtml(stationList) : ''}</span>`;
+                html += `<span class="station-cell">${stationList}</span>`;
                 html += `</div>`;
                 
                 // Show variants indented under parent
@@ -2040,14 +2037,12 @@ function displaySpingridFormat(matches) {
                         const matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
                         const variantSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedVariant];
                         const variantCount = variantSpins ? Object.values(variantSpins).reduce((sum, count) => sum + count, 0) : 0;
-                        const variantStationList = variantSpins ? Object.entries(variantSpins)
-                            .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
-                            .join(', ') : '';
+                        const variantStationList = variantSpins && variantCount > 0 ? formatStationList(Object.entries(variantSpins)) : '';
                         
                         html += `<div class="song-count-entry variant-track">`;
                         html += `<span class="song-name-cell" style="padding-left: 20px; color: #718096;">→ ${escapeHtml(variantSong)}</span>`;
                         html += `<span class="count-cell">${variantCount > 0 ? variantCount : ''}</span>`;
-                        html += `<span class="station-cell">${variantCount > 0 ? escapeHtml(variantStationList) : ''}</span>`;
+                        html += `<span class="station-cell">${variantStationList}</span>`;
                         html += `</div>`;
                     });
                 }
@@ -2085,14 +2080,12 @@ function displaySpingridFormat(matches) {
                 
                 if (totalCount > 0) {
                     // Song has spins - show count and stations
-                    const stationList = Object.entries(aggregatedSpins)
-                        .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
-                        .join(', ');
+                    const stationList = formatStationList(Object.entries(aggregatedSpins));
                     
                     html += `<div class="song-count-entry">`;
                     html += `<span class="song-name-cell">${escapeHtml(group.displayName)}</span>`;
                     html += `<span class="count-cell">${totalCount}</span>`;
-                    html += `<span class="station-cell">${escapeHtml(stationList)}</span>`;
+                    html += `<span class="station-cell">${stationList}</span>`;
                     html += `</div>`;
                 } else {
                     // Song has no spins - show empty
@@ -2121,13 +2114,11 @@ function displaySpingridFormat(matches) {
             html += `</button>`;
             html += `<div class="qc-dropdown" id="qc-${escapeHtml(artistName)}" style="display: none;">`;
             foundTracks.forEach(track => {
-                const stationList = Object.entries(track.stations)
-                    .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
-                    .join(', ');
+                const stationList = formatStationList(Object.entries(track.stations));
                 html += `<div class="qc-track-entry">`;
                 html += `<span class="qc-track-name">${escapeHtml(track.song)}</span>`;
                 html += `<span class="qc-track-count">${track.count}</span>`;
-                html += `<span class="qc-track-stations">${escapeHtml(stationList)}</span>`;
+                html += `<span class="qc-track-stations">${stationList}</span>`;
                 html += `<button class="qc-add-btn" onclick="addTrackToDatabase('${escapeHtml(artistName)}', '${escapeHtml(track.song)}')">Add to DB</button>`;
                 html += `</div>`;
             });
@@ -3126,6 +3117,59 @@ async function saveTrackVariants() {
     } catch (e) {
         console.error('Error saving track variants:', e);
     }
+}
+
+// Core stations management
+function loadCoreStations() {
+    try {
+        const stored = localStorage.getItem('coreStations');
+        if (stored) {
+            coreStations = JSON.parse(stored);
+            console.log('Core stations loaded from localStorage:', coreStations);
+        } else {
+            coreStations = [];
+        }
+    } catch (e) {
+        console.error('Error loading core stations:', e);
+        coreStations = [];
+    }
+}
+
+function saveCoreStations() {
+    try {
+        localStorage.setItem('coreStations', JSON.stringify(coreStations));
+        console.log('Core stations saved to localStorage');
+    } catch (e) {
+        console.error('Error saving core stations:', e);
+    }
+}
+
+// Format station name - bold if it's a core station
+function formatStationName(stationName) {
+    // Check if this station (or any part of it) is a core station
+    // Handle cases like "KEXP [DJ Name]" or "Station (2)"
+    const stationBase = stationName.split(' [')[0].split(' (')[0].trim();
+    const isCore = coreStations.some(core => {
+        const coreLower = core.toLowerCase().trim();
+        const stationLower = stationBase.toLowerCase();
+        return stationLower === coreLower || stationLower.includes(coreLower) || coreLower.includes(stationLower);
+    });
+    
+    if (isCore) {
+        return `<strong>${escapeHtml(stationName)}</strong>`;
+    }
+    return escapeHtml(stationName);
+}
+
+// Format a list of stations (comma-separated) with core stations bolded
+function formatStationList(stationEntries) {
+    // stationEntries is an array of [station, count] pairs
+    return stationEntries
+        .map(([station, count]) => {
+            const displayName = count > 1 ? `${station} (${count})` : station;
+            return formatStationName(displayName);
+        })
+        .join(', ');
 }
 
 function openVariantModal(artist, song) {
