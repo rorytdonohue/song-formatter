@@ -1970,8 +1970,10 @@ function displaySpingridFormat(matches) {
     });
     
     // Build HTML table with proper styling for Google Sheets
-    const tableStyle = 'font-family: Helvetica, Arial, sans-serif; font-size: 9pt; border-collapse: collapse;';
-    const cellStyle = 'text-align: center; vertical-align: middle; word-wrap: break-word; padding: 4px;';
+    const tableStyle = 'font-family: Helvetica, Arial, sans-serif; font-size: 9pt; border-collapse: collapse; width: 100%; border: 1px solid #ddd;';
+    const songCellStyle = 'text-align: center; vertical-align: middle; word-wrap: break-word; padding: 4px; border: 1px solid #ddd;';
+    const countCellStyle = 'text-align: center; vertical-align: middle; word-wrap: break-word; padding: 4px; border: 1px solid #ddd;';
+    const stationCellStyle = 'text-align: center; vertical-align: middle; word-wrap: break-word; padding: 4px; border: 1px solid #ddd;';
     
     let html = `<table style="${tableStyle}" id="spingridTable">`;
     
@@ -2085,9 +2087,9 @@ function displaySpingridFormat(matches) {
                 
                 // Show parent track
                 html += `<tr>`;
-                html += `<td style="${cellStyle}">${escapeHtml(parentSong)}</td>`;
-                html += `<td style="${cellStyle}">${totalCount > 0 ? totalCount : ''}</td>`;
-                html += `<td style="${cellStyle}">${stationList}</td>`;
+                html += `<td style="${songCellStyle}">${escapeHtml(parentSong)}</td>`;
+                html += `<td style="${countCellStyle}">${totalCount > 0 ? totalCount : ''}</td>`;
+                html += `<td style="${stationCellStyle}">${stationList}</td>`;
                 html += `</tr>`;
                 
                 // Show variants indented under parent
@@ -2101,9 +2103,9 @@ function displaySpingridFormat(matches) {
                         const variantStationList = variantSpins && variantCount > 0 ? formatStationList(Object.entries(variantSpins)) : '';
                         
                         html += `<tr>`;
-                        html += `<td style="${cellStyle}">→ ${escapeHtml(variantSong)}</td>`;
-                        html += `<td style="${cellStyle}">${variantCount > 0 ? variantCount : ''}</td>`;
-                        html += `<td style="${cellStyle}">${variantStationList}</td>`;
+                        html += `<td style="${songCellStyle}">→ ${escapeHtml(variantSong)}</td>`;
+                        html += `<td style="${countCellStyle}">${variantCount > 0 ? variantCount : ''}</td>`;
+                        html += `<td style="${stationCellStyle}">${variantStationList}</td>`;
                         html += `</tr>`;
                     });
                 }
@@ -2144,25 +2146,25 @@ function displaySpingridFormat(matches) {
                     const stationList = formatStationList(Object.entries(aggregatedSpins));
                     
                     html += `<tr>`;
-                    html += `<td style="${cellStyle}">${escapeHtml(group.displayName)}</td>`;
-                    html += `<td style="${cellStyle}">${totalCount}</td>`;
-                    html += `<td style="${cellStyle}">${stationList}</td>`;
+                    html += `<td style="${songCellStyle}">${escapeHtml(group.displayName)}</td>`;
+                    html += `<td style="${countCellStyle}">${totalCount}</td>`;
+                    html += `<td style="${stationCellStyle}">${stationList}</td>`;
                     html += `</tr>`;
                 } else {
                     // Song has no spins - show empty
                     html += `<tr>`;
-                    html += `<td style="${cellStyle}">${escapeHtml(group.displayName)}</td>`;
-                    html += `<td style="${cellStyle}"></td>`;
-                    html += `<td style="${cellStyle}"></td>`;
+                    html += `<td style="${songCellStyle}">${escapeHtml(group.displayName)}</td>`;
+                    html += `<td style="${countCellStyle}"></td>`;
+                    html += `<td style="${stationCellStyle}"></td>`;
                     html += `</tr>`;
                 }
             });
         } else {
             // Artist not in tracklist database - show empty entry
             html += `<tr>`;
-            html += `<td style="${cellStyle}">No tracks in database</td>`;
-            html += `<td style="${cellStyle}">0</td>`;
-            html += `<td style="${cellStyle}">Add tracks to tracklist database</td>`;
+            html += `<td style="${songCellStyle}">No tracks in database</td>`;
+            html += `<td style="${countCellStyle}">0</td>`;
+            html += `<td style="${stationCellStyle}">Add tracks to tracklist database</td>`;
             html += `</tr>`;
         }
     });
