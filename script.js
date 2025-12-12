@@ -1969,7 +1969,11 @@ function displaySpingridFormat(matches) {
         spinCounts[match.artist][normalizedSong][normalizedStation]++;
     });
     
-    let html = '';
+    // Build HTML table with proper styling for Google Sheets
+    const tableStyle = 'font-family: Helvetica, Arial, sans-serif; font-size: 9pt; border-collapse: collapse;';
+    const cellStyle = 'text-align: center; vertical-align: middle; word-wrap: break-word; padding: 4px;';
+    
+    let html = `<table style="${tableStyle}" id="spingridTable">`;
     
     // Process each artist from the search list (in order)
     artistList.forEach(artistName => {
@@ -1979,10 +1983,6 @@ function displaySpingridFormat(matches) {
         const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
             artist.toLowerCase() === artistLower
         );
-        
-        // Create a separate section for each artist
-        html += `<div class="artist-section">`;
-        html += `<div class="artist-header">${escapeHtml(artistName.toUpperCase())}</div>`;
         
         if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
             // Artist has tracks in database - show all their songs
@@ -2084,11 +2084,11 @@ function displaySpingridFormat(matches) {
                 const stationList = totalCount > 0 ? formatStationList(Object.entries(group.spins)) : '';
                 
                 // Show parent track
-                html += `<div class="song-count-entry parent-track">`;
-                html += `<span class="song-name-cell">${escapeHtml(parentSong)}</span>`;
-                html += `<span class="count-cell">${totalCount > 0 ? totalCount : ''}</span>`;
-                html += `<span class="station-cell">${stationList}</span>`;
-                html += `</div>`;
+                html += `<tr>`;
+                html += `<td style="${cellStyle}">${escapeHtml(parentSong)}</td>`;
+                html += `<td style="${cellStyle}">${totalCount > 0 ? totalCount : ''}</td>`;
+                html += `<td style="${cellStyle}">${stationList}</td>`;
+                html += `</tr>`;
                 
                 // Show variants indented under parent
                 if (group.variants.length > 0) {
@@ -2100,11 +2100,11 @@ function displaySpingridFormat(matches) {
                         const variantCount = variantSpins ? Object.values(variantSpins).reduce((sum, count) => sum + count, 0) : 0;
                         const variantStationList = variantSpins && variantCount > 0 ? formatStationList(Object.entries(variantSpins)) : '';
                         
-                        html += `<div class="song-count-entry variant-track">`;
-                        html += `<span class="song-name-cell" style="padding-left: 20px; color: #718096;">→ ${escapeHtml(variantSong)}</span>`;
-                        html += `<span class="count-cell">${variantCount > 0 ? variantCount : ''}</span>`;
-                        html += `<span class="station-cell">${variantStationList}</span>`;
-                        html += `</div>`;
+                        html += `<tr>`;
+                        html += `<td style="${cellStyle}">→ ${escapeHtml(variantSong)}</td>`;
+                        html += `<td style="${cellStyle}">${variantCount > 0 ? variantCount : ''}</td>`;
+                        html += `<td style="${cellStyle}">${variantStationList}</td>`;
+                        html += `</tr>`;
                     });
                 }
             });
@@ -2143,54 +2143,61 @@ function displaySpingridFormat(matches) {
                     // Song has spins - show count and stations
                     const stationList = formatStationList(Object.entries(aggregatedSpins));
                     
-                    html += `<div class="song-count-entry">`;
-                    html += `<span class="song-name-cell">${escapeHtml(group.displayName)}</span>`;
-                    html += `<span class="count-cell">${totalCount}</span>`;
-                    html += `<span class="station-cell">${stationList}</span>`;
-                    html += `</div>`;
+                    html += `<tr>`;
+                    html += `<td style="${cellStyle}">${escapeHtml(group.displayName)}</td>`;
+                    html += `<td style="${cellStyle}">${totalCount}</td>`;
+                    html += `<td style="${cellStyle}">${stationList}</td>`;
+                    html += `</tr>`;
                 } else {
                     // Song has no spins - show empty
-                    html += `<div class="song-count-entry">`;
-                    html += `<span class="song-name-cell">${escapeHtml(group.displayName)}</span>`;
-                    html += `<span class="count-cell"></span>`;
-                    html += `<span class="station-cell"></span>`;
-                    html += `</div>`;
+                    html += `<tr>`;
+                    html += `<td style="${cellStyle}">${escapeHtml(group.displayName)}</td>`;
+                    html += `<td style="${cellStyle}"></td>`;
+                    html += `<td style="${cellStyle}"></td>`;
+                    html += `</tr>`;
                 }
             });
         } else {
             // Artist not in tracklist database - show empty entry
-            html += `<div class="song-count-entry">`;
-            html += `<span class="song-name-cell">No tracks in database</span>`;
-            html += `<span class="count-cell" style="background: #f0f0f0; color: #999;">0</span>`;
-            html += `<span class="station-cell" style="color: #ccc;">Add tracks to tracklist database</span>`;
-            html += `</div>`;
+            html += `<tr>`;
+            html += `<td style="${cellStyle}">No tracks in database</td>`;
+            html += `<td style="${cellStyle}">0</td>`;
+            html += `<td style="${cellStyle}">Add tracks to tracklist database</td>`;
+            html += `</tr>`;
         }
-        
-        // Add QC dropdown for tracks found in Excel but not in tracklist
-        const foundTracks = getFoundTracksNotInTracklist(artistName, matches, tracklistArtist);
-        if (foundTracks.length > 0) {
-            html += `<div class="qc-section">`;
-            html += `<button class="qc-toggle-btn" onclick="toggleQCDropdown('${escapeHtml(artistName)}')">`;
-            html += `🔍 QC: ${foundTracks.length} tracks found in Online Radio Box but not in tracklist (${foundTracks.reduce((sum, t) => sum + t.count, 0)} total spins)`;
-            html += `</button>`;
-            html += `<div class="qc-dropdown" id="qc-${escapeHtml(artistName)}" style="display: none;">`;
-            foundTracks.forEach(track => {
-                const stationList = formatStationList(Object.entries(track.stations));
-                html += `<div class="qc-track-entry">`;
-                html += `<span class="qc-track-name">${escapeHtml(track.song)}</span>`;
-                html += `<span class="qc-track-count">${track.count}</span>`;
-                html += `<span class="qc-track-stations">${stationList}</span>`;
-                html += `<button class="qc-add-btn" onclick="addTrackToDatabase('${escapeHtml(artistName)}', '${escapeHtml(track.song)}')">Add to DB</button>`;
-                html += `</div>`;
-            });
-            html += `</div>`;
-            html += `</div>`;
-        }
-        
-        html += `</div>`;
     });
     
-    spingridResultsBody.innerHTML = html;
+    html += `</table>`;
+    
+    // Add QC section below table (not in table for better UX)
+    let qcHtml = '';
+    artistList.forEach(artistName => {
+        const artistLower = artistName.toLowerCase();
+        const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
+            artist.toLowerCase() === artistLower
+        );
+        const foundTracks = getFoundTracksNotInTracklist(artistName, matches, tracklistArtist);
+        if (foundTracks.length > 0) {
+            qcHtml += `<div class="qc-section">`;
+            qcHtml += `<button class="qc-toggle-btn" onclick="toggleQCDropdown('${escapeHtml(artistName)}')">`;
+            qcHtml += `🔍 QC: ${foundTracks.length} tracks found in Online Radio Box but not in tracklist (${foundTracks.reduce((sum, t) => sum + t.count, 0)} total spins)`;
+            qcHtml += `</button>`;
+            qcHtml += `<div class="qc-dropdown" id="qc-${escapeHtml(artistName)}" style="display: none;">`;
+            foundTracks.forEach(track => {
+                const stationList = formatStationList(Object.entries(track.stations));
+                qcHtml += `<div class="qc-track-entry">`;
+                qcHtml += `<span class="qc-track-name">${escapeHtml(track.song)}</span>`;
+                qcHtml += `<span class="qc-track-count">${track.count}</span>`;
+                qcHtml += `<span class="qc-track-stations">${stationList}</span>`;
+                qcHtml += `<button class="qc-add-btn" onclick="addTrackToDatabase('${escapeHtml(artistName)}', '${escapeHtml(track.song)}')">Add to DB</button>`;
+                qcHtml += `</div>`;
+            });
+            qcHtml += `</div>`;
+            qcHtml += `</div>`;
+        }
+    });
+    
+    spingridResultsBody.innerHTML = html + qcHtml;
 }
 
 // Helper: Check if a station is a core station
@@ -2234,7 +2241,7 @@ function formatStationForHTML(stationName, count) {
     return stationHTML;
 }
 
-// Copy spingrid format data for Excel - extract directly from displayed spingrid
+// Copy spingrid format data for Excel - extract table directly
 function copySpingridForExcel() {
     const spingridBody = document.getElementById('spingridResultsBody');
     if (!spingridBody) {
@@ -2242,66 +2249,30 @@ function copySpingridForExcel() {
         return;
     }
     
-    // Extract all song-count-entry divs (skip artist headers and QC sections)
-    const songEntries = spingridBody.querySelectorAll('.song-count-entry');
-    
-    if (songEntries.length === 0) {
-        alert('No data to copy.');
+    // Get the table directly
+    const table = spingridBody.querySelector('#spingridTable');
+    if (!table) {
+        alert('No spingrid table found. Please run a search first.');
         return;
     }
     
-    // Build table rows from the displayed content
-    const htmlRows = [];
-    
-    songEntries.forEach(entry => {
-        const songCell = entry.querySelector('.song-name-cell');
-        const countCell = entry.querySelector('.count-cell');
-        const stationCell = entry.querySelector('.station-cell');
-        
-        if (!songCell) return; // Skip if structure is wrong
-        
-        // Get text content and innerHTML for stations (to preserve bold tags)
-        const songText = songCell.textContent.trim();
-        const countText = countCell ? countCell.textContent.trim() : '';
-        
-        // For station cell, get innerHTML to preserve bold tags, but clean it up
-        let stationHTML = '';
-        if (stationCell) {
-            // Clone the station cell to preserve formatting
-            const clone = stationCell.cloneNode(true);
-            // Remove any extra styling/spans but keep bold tags
-            stationHTML = clone.innerHTML;
-        }
-        
-        // Only add rows that have content (skip empty entries)
-        if (songText && songText !== 'No tracks in database') {
-            htmlRows.push(`<tr><td>${escapeHtml(songText)}</td><td>${countText}</td><td>${stationHTML}</td></tr>`);
-        }
-    });
-    
-    if (htmlRows.length === 0) {
-        alert('No data to copy.');
-        return;
-    }
-    
-    const htmlTable = '<table>' + htmlRows.join('') + '</table>';
+    // Clone the table to preserve all formatting
+    const clonedTable = table.cloneNode(true);
+    const htmlTable = clonedTable.outerHTML;
     const htmlContent = '<html><body>' + htmlTable + '</body></html>';
     
     // Build plain text version for fallback
     const textRows = [];
-    songEntries.forEach(entry => {
-        const songCell = entry.querySelector('.song-name-cell');
-        const countCell = entry.querySelector('.count-cell');
-        const stationCell = entry.querySelector('.station-cell');
-        
-        if (!songCell) return;
-        
-        const songText = songCell.textContent.trim();
-        const countText = countCell ? countCell.textContent.trim() : '';
-        const stationText = stationCell ? stationCell.textContent.trim() : '';
-        
-        if (songText && songText !== 'No tracks in database') {
-            textRows.push(`${songText}\t${countText}\t${stationText}`);
+    const rows = table.querySelectorAll('tr');
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 3) {
+            const songText = cells[0].textContent.trim();
+            const countText = cells[1].textContent.trim();
+            const stationText = cells[2].textContent.trim();
+            if (songText && songText !== 'No tracks in database') {
+                textRows.push(`${songText}\t${countText}\t${stationText}`);
+            }
         }
     });
     const textContent = textRows.join('\n');
