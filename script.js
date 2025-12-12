@@ -1250,9 +1250,9 @@ function copyMergedSpingridForExcel() {
     
     // Build both plain text and HTML versions
     let excelData = '';
-    // Use inline styles on table and cells for Google Sheets compatibility
-    // Google Sheets needs font-size in pixels, not points
-    let htmlData = '<table style="font-family: Helvetica, Arial, sans-serif; font-size: 12px; border-collapse: collapse;">';
+    // Simplified HTML for Google Sheets - just use table, no font styling
+    // Google Sheets will use its default formatting, we only preserve bold
+    let htmlData = '<table>';
     
     // Process each artist from the search list (in order)
     artistList.forEach(artistName => {
@@ -1307,11 +1307,11 @@ function copyMergedSpingridForExcel() {
                     
                     // HTML version with bold formatting and font styling
                     const stationList = formatStationList(Object.entries(aggregatedSpins));
-                    // Google Sheets: use 12px (equivalent to 9pt) and apply to each cell
-                    htmlData += `<tr><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">${escapeHtml(group.displayName)}</td><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">${totalCount}</td><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">${stationList}</td></tr>`;
+                    // Simplified - just preserve bold, no font styling
+                    htmlData += `<tr><td>${escapeHtml(group.displayName)}</td><td>${totalCount}</td><td>${stationList}</td></tr>`;
                 } else {
                     excelData += `${group.displayName}\t\t\n`;
-                    htmlData += `<tr><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">${escapeHtml(group.displayName)}</td><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;"></td><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;"></td></tr>`;
+                    htmlData += `<tr><td>${escapeHtml(group.displayName)}</td><td></td><td></td></tr>`;
                 }
             });
         }
@@ -3283,6 +3283,12 @@ function loadCoreStations() {
         if (stored) {
             coreStations = JSON.parse(stored);
             console.log('Core stations loaded from localStorage:', coreStations.length, 'stations');
+            // Ensure WYMS is in the list (in case it was added after initial save)
+            if (!coreStations.includes('WYMS')) {
+                coreStations.push('WYMS');
+                saveCoreStations();
+                console.log('Added WYMS to core stations list');
+            }
         } else {
             // Default core stations list (from CSV - exact match)
             coreStations = [
@@ -3358,7 +3364,8 @@ function formatStationName(stationName) {
     });
     
     if (isCore) {
-        return `<strong>${escapeHtml(stationName)}</strong>`;
+        // Use <b> tag instead of <strong> for better Google Sheets compatibility
+        return `<b>${escapeHtml(stationName)}</b>`;
     }
     return escapeHtml(stationName);
 }
