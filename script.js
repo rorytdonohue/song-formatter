@@ -2268,7 +2268,11 @@ function formatStationForHTML(stationName, count) {
 }
 
 // Copy spingrid format data for Excel - use TSV string only
-function copySpingridForExcel() {
+// 🧪 INSTRUMENTED FOR DEBUGGING: Logs, verification, and explicit text/plain MIME type
+async function copySpingridForExcel() {
+    // 🧪 COMMAND #2: Visible side effect to prove button fires
+    alert('COPY HANDLER FIRED - Debug mode active');
+    
     const spingridBody = document.getElementById('spingridResultsBody');
     if (!spingridBody) {
         alert('No export data available. Please run a search first.');
@@ -2282,14 +2286,81 @@ function copySpingridForExcel() {
         return;
     }
     
-    // Copy TSV string to clipboard (explicitly TSV only, no HTML)
-    navigator.clipboard.writeText(tsv).then(() => {
-        console.log('TSV copied for Excel');
-        alert('Spingrid data copied to clipboard! Paste into Google Sheets or Excel.');
-    }).catch(err => {
+    // 🧪 COMMAND #1: Log exact string and character codes
+    console.log('=== TSV COPY DEBUG ===');
+    console.log('RAW TSV STRING:', tsv);
+    console.log('TSV LENGTH:', tsv.length);
+    console.log('CHAR CODES:', [...tsv].map(c => c.charCodeAt(0)));
+    
+    // Check for tabs (charCode 9)
+    const tabCount = (tsv.match(/\t/g) || []).length;
+    const newlineCount = (tsv.match(/\n/g) || []).length;
+    console.log('TAB COUNT (charCode 9):', tabCount);
+    console.log('NEWLINE COUNT (charCode 10):', newlineCount);
+    
+    // Show first 200 chars for inspection
+    console.log('FIRST 200 CHARS:', tsv.substring(0, 200));
+    
+    // 🧪 COMMAND #4: Optional visual tab test (uncomment to enable)
+    // Replace \t with [TAB] to visually confirm delimiter positions
+    // const tsvWithVisibleTabs = tsv.replace(/\t/g, '[TAB]');
+    // console.log('TSV WITH VISIBLE TABS (first 200):', tsvWithVisibleTabs.substring(0, 200));
+    // Uncomment the line below to copy the visible version instead:
+    // const tsv = tsvWithVisibleTabs;
+    
+    try {
+        // 🧪 COMMAND #3: Force plain text MIME type with ClipboardItem
+        const blob = new Blob([tsv], { type: 'text/plain' });
+        const item = new ClipboardItem({
+            'text/plain': blob
+        });
+        
+        await navigator.clipboard.write([item]);
+        console.log('Clipboard write successful');
+        
+        // 🧪 COMMAND #1: Read clipboard back to verify
+        const verify = await navigator.clipboard.readText();
+        console.log('CLIPBOARD READBACK:', verify);
+        console.log('READBACK LENGTH:', verify.length);
+        console.log('READBACK === ORIGINAL?', verify === tsv);
+        
+        // Check if readback has tabs
+        const readbackTabCount = (verify.match(/\t/g) || []).length;
+        console.log('READBACK TAB COUNT:', readbackTabCount);
+        
+        if (verify !== tsv) {
+            console.error('⚠️ CLIPBOARD MISMATCH: Readback differs from original!');
+            console.log('DIFF LENGTH:', Math.abs(verify.length - tsv.length));
+        }
+        
+        if (readbackTabCount === 0) {
+            console.error('⚠️ NO TABS IN READBACK: Clipboard may have been overwritten!');
+        }
+        
+        console.log('=== END TSV COPY DEBUG ===');
+        
+        alert('Spingrid data copied to clipboard! Check console for debug info. Paste into Google Sheets or Excel.');
+    } catch (err) {
         console.error('Clipboard copy failed:', err);
-        alert('Failed to copy to clipboard. Please try again.');
-    });
+        
+        // 🧪 COMMAND #5: Fallback to textarea method
+        console.log('Falling back to textarea method...');
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = tsv;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            console.log('Fallback copy successful via textarea');
+            alert('Spingrid data copied (fallback method)! Check console for debug info.');
+        } catch (err2) {
+            console.error('Fallback copy also failed:', err2);
+            alert('Failed to copy to clipboard. Please try again.');
+        }
+    }
 }
 
 // Set result format and update display
