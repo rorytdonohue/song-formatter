@@ -1317,46 +1317,46 @@ function copyMergedSpingridForExcel() {
     });
     htmlData += '</table>';
     
-    // For Google Sheets compatibility, use execCommand with temporary element
-    // This method works better with Google Sheets than ClipboardItem API
-    const tempDiv = document.createElement('div');
-    tempDiv.style.position = 'fixed';
-    tempDiv.style.left = '-9999px';
-    tempDiv.style.top = '-9999px';
-    tempDiv.innerHTML = htmlData;
-    document.body.appendChild(tempDiv);
+    // Use ClipboardItem API for better Google Sheets compatibility
+    // This ensures proper HTML formatting is preserved
+    const finalHtml = '<html><body>' + htmlData + '</body></html>';
+    const htmlBlob = new Blob([finalHtml], { type: 'text/html' });
+    const textBlob = new Blob([excelData], { type: 'text/plain' });
+    const clipboardItem = new ClipboardItem({
+        'text/html': htmlBlob,
+        'text/plain': textBlob
+    });
     
-    // Select the content
-    const range = document.createRange();
-    range.selectNodeContents(tempDiv);
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-    
-    try {
-        // Use execCommand for better Google Sheets compatibility
-        document.execCommand('copy');
-        selection.removeAllRanges();
-        document.body.removeChild(tempDiv);
+    navigator.clipboard.write([clipboardItem]).then(() => {
         alert('Spingrid data copied to clipboard! Paste into Google Sheets and formatting (including bold core stations) will be preserved.');
-    } catch (err) {
-        console.error('execCommand failed, trying ClipboardItem API:', err);
+    }).catch(err => {
+        console.error('ClipboardItem API failed, trying execCommand fallback:', err);
+        
+        // Fallback to execCommand with temporary element
+        const tempDiv = document.createElement('div');
+        tempDiv.style.position = 'fixed';
+        tempDiv.style.left = '-9999px';
+        tempDiv.style.top = '-9999px';
+        tempDiv.innerHTML = htmlData;
+        document.body.appendChild(tempDiv);
+        
+        // Select the content
+        const range = document.createRange();
+        range.selectNodeContents(tempDiv);
+        const selection = window.getSelection();
         selection.removeAllRanges();
-        document.body.removeChild(tempDiv);
+        selection.addRange(range);
         
-        // Fallback to ClipboardItem API
-        const finalHtml = '<html><body>' + htmlData + '</body></html>';
-        const htmlBlob = new Blob([finalHtml], { type: 'text/html' });
-        const textBlob = new Blob([excelData], { type: 'text/plain' });
-        const clipboardItem = new ClipboardItem({
-            'text/html': htmlBlob,
-            'text/plain': textBlob
-        });
-        
-        navigator.clipboard.write([clipboardItem]).then(() => {
-            alert('Spingrid data copied to clipboard! Paste into Google Sheets.');
-        }).catch(err2 => {
-            console.error('Failed to copy: ', err2);
+        try {
+            document.execCommand('copy');
+            selection.removeAllRanges();
+            document.body.removeChild(tempDiv);
+            alert('Spingrid data copied to clipboard! Paste into Google Sheets and formatting (including bold core stations) will be preserved.');
+        } catch (err2) {
+            console.error('execCommand also failed:', err2);
+            selection.removeAllRanges();
+            document.body.removeChild(tempDiv);
+            
             // Final fallback to plain text
             navigator.clipboard.writeText(excelData).then(() => {
                 alert('Spingrid data copied to clipboard (plain text). Paste into Google Sheets.');
@@ -1364,8 +1364,8 @@ function copyMergedSpingridForExcel() {
                 console.error('Failed to copy: ', err3);
                 alert('failed to copy to clipboard. please try again.');
             });
-        });
-    }
+        }
+    });
 }
 
 // Process Spinitron data in fallback mode (no tracklist database match)
@@ -2343,46 +2343,46 @@ function copySpingridForExcel() {
     });
     htmlData += '</table>';
     
-    // For Google Sheets compatibility, use execCommand with temporary element
-    // This method works better with Google Sheets than ClipboardItem API
-    const tempDiv = document.createElement('div');
-    tempDiv.style.position = 'fixed';
-    tempDiv.style.left = '-9999px';
-    tempDiv.style.top = '-9999px';
-    tempDiv.innerHTML = htmlData;
-    document.body.appendChild(tempDiv);
+    // Use ClipboardItem API for better Google Sheets compatibility
+    // This ensures proper HTML formatting is preserved
+    const finalHtml = '<html><body>' + htmlData + '</body></html>';
+    const htmlBlob = new Blob([finalHtml], { type: 'text/html' });
+    const textBlob = new Blob([excelData], { type: 'text/plain' });
+    const clipboardItem = new ClipboardItem({
+        'text/html': htmlBlob,
+        'text/plain': textBlob
+    });
     
-    // Select the content
-    const range = document.createRange();
-    range.selectNodeContents(tempDiv);
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-    
-    try {
-        // Use execCommand for better Google Sheets compatibility
-        document.execCommand('copy');
-        selection.removeAllRanges();
-        document.body.removeChild(tempDiv);
+    navigator.clipboard.write([clipboardItem]).then(() => {
         alert('Spingrid data copied to clipboard! Paste into Google Sheets and formatting (including bold core stations) will be preserved.');
-    } catch (err) {
-        console.error('execCommand failed, trying ClipboardItem API:', err);
+    }).catch(err => {
+        console.error('ClipboardItem API failed, trying execCommand fallback:', err);
+        
+        // Fallback to execCommand with temporary element
+        const tempDiv = document.createElement('div');
+        tempDiv.style.position = 'fixed';
+        tempDiv.style.left = '-9999px';
+        tempDiv.style.top = '-9999px';
+        tempDiv.innerHTML = htmlData;
+        document.body.appendChild(tempDiv);
+        
+        // Select the content
+        const range = document.createRange();
+        range.selectNodeContents(tempDiv);
+        const selection = window.getSelection();
         selection.removeAllRanges();
-        document.body.removeChild(tempDiv);
+        selection.addRange(range);
         
-        // Fallback to ClipboardItem API
-        const finalHtml = '<html><body>' + htmlData + '</body></html>';
-        const htmlBlob = new Blob([finalHtml], { type: 'text/html' });
-        const textBlob = new Blob([excelData], { type: 'text/plain' });
-        const clipboardItem = new ClipboardItem({
-            'text/html': htmlBlob,
-            'text/plain': textBlob
-        });
-        
-        navigator.clipboard.write([clipboardItem]).then(() => {
-            alert('Spingrid data copied to clipboard! Paste into Google Sheets.');
-        }).catch(err2 => {
-            console.error('Failed to copy: ', err2);
+        try {
+            document.execCommand('copy');
+            selection.removeAllRanges();
+            document.body.removeChild(tempDiv);
+            alert('Spingrid data copied to clipboard! Paste into Google Sheets and formatting (including bold core stations) will be preserved.');
+        } catch (err2) {
+            console.error('execCommand also failed:', err2);
+            selection.removeAllRanges();
+            document.body.removeChild(tempDiv);
+            
             // Final fallback to plain text
             navigator.clipboard.writeText(excelData).then(() => {
                 alert('Spingrid data copied to clipboard (plain text). Paste into Google Sheets.');
@@ -2390,8 +2390,8 @@ function copySpingridForExcel() {
                 console.error('Failed to copy: ', err3);
                 alert('failed to copy to clipboard. please try again.');
             });
-        });
-    }
+        }
+    });
 }
 
 // Set result format and update display
