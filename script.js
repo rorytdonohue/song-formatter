@@ -1315,25 +1315,8 @@ function copyMergedSpingridForExcel() {
     });
     htmlData += '</table>';
     
-    // Create Excel-compatible HTML clipboard format
-    // Excel requires specific HTML structure with proper headers
-    const htmlHeader = 'Version:1.0\r\nStartHTML:0000000100\r\nEndHTML:0000000000\r\nStartFragment:0000000100\r\nEndFragment:0000000000\r\n';
-    const htmlStart = '<html><body>\r\n<!--StartFragment-->\r\n';
-    const htmlEnd = '\r\n<!--EndFragment-->\r\n</body></html>';
-    const fullHtml = htmlHeader + htmlStart + htmlData + htmlEnd;
-    
-    // Calculate positions for Excel clipboard format
-    const startHtmlPos = fullHtml.indexOf('<html>');
-    const endHtmlPos = fullHtml.length;
-    const startFragPos = fullHtml.indexOf('<!--StartFragment-->') + '<!--StartFragment-->'.length;
-    const endFragPos = fullHtml.indexOf('<!--EndFragment-->');
-    
-    // Replace placeholders with actual positions
-    const finalHtml = fullHtml
-        .replace('StartHTML:0000000100', `StartHTML:${String(startHtmlPos).padStart(10, '0')}`)
-        .replace('EndHTML:0000000000', `EndHTML:${String(endHtmlPos).padStart(10, '0')}`)
-        .replace('StartFragment:0000000100', `StartFragment:${String(startFragPos).padStart(10, '0')}`)
-        .replace('EndFragment:0000000000', `EndFragment:${String(endFragPos).padStart(10, '0')}`);
+    // Wrap in proper HTML structure for clipboard
+    const finalHtml = '<html><body>' + htmlData + '</body></html>';
     
     // Copy to clipboard with both HTML and plain text formats
     const htmlBlob = new Blob([finalHtml], { type: 'text/html' });
@@ -2330,25 +2313,8 @@ function copySpingridForExcel() {
     });
     htmlData += '</table>';
     
-    // Create Excel-compatible HTML clipboard format
-    // Excel requires specific HTML structure with proper headers
-    const htmlHeader = 'Version:1.0\r\nStartHTML:0000000100\r\nEndHTML:0000000000\r\nStartFragment:0000000100\r\nEndFragment:0000000000\r\n';
-    const htmlStart = '<html><body>\r\n<!--StartFragment-->\r\n';
-    const htmlEnd = '\r\n<!--EndFragment-->\r\n</body></html>';
-    const fullHtml = htmlHeader + htmlStart + htmlData + htmlEnd;
-    
-    // Calculate positions for Excel clipboard format
-    const startHtmlPos = fullHtml.indexOf('<html>');
-    const endHtmlPos = fullHtml.length;
-    const startFragPos = fullHtml.indexOf('<!--StartFragment-->') + '<!--StartFragment-->'.length;
-    const endFragPos = fullHtml.indexOf('<!--EndFragment-->');
-    
-    // Replace placeholders with actual positions
-    const finalHtml = fullHtml
-        .replace('StartHTML:0000000100', `StartHTML:${String(startHtmlPos).padStart(10, '0')}`)
-        .replace('EndHTML:0000000000', `EndHTML:${String(endHtmlPos).padStart(10, '0')}`)
-        .replace('StartFragment:0000000100', `StartFragment:${String(startFragPos).padStart(10, '0')}`)
-        .replace('EndFragment:0000000000', `EndFragment:${String(endFragPos).padStart(10, '0')}`);
+    // Wrap in proper HTML structure for clipboard
+    const finalHtml = '<html><body>' + htmlData + '</body></html>';
     
     // Copy to clipboard with both HTML and plain text formats
     const htmlBlob = new Blob([finalHtml], { type: 'text/html' });
