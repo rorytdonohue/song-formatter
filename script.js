@@ -1250,7 +1250,9 @@ function copyMergedSpingridForExcel() {
     
     // Build both plain text and HTML versions
     let excelData = '';
-    let htmlData = '<table style="font-family: Helvetica; font-size: 9pt;">';
+    // Use inline styles on table and cells for Google Sheets compatibility
+    // Google Sheets needs font-size in pixels, not points
+    let htmlData = '<table style="font-family: Helvetica, Arial, sans-serif; font-size: 12px; border-collapse: collapse;">';
     
     // Process each artist from the search list (in order)
     artistList.forEach(artistName => {
@@ -1305,10 +1307,11 @@ function copyMergedSpingridForExcel() {
                     
                     // HTML version with bold formatting and font styling
                     const stationList = formatStationList(Object.entries(aggregatedSpins));
-                    htmlData += `<tr><td style="font-family: Helvetica; font-size: 9pt;">${escapeHtml(group.displayName)}</td><td style="font-family: Helvetica; font-size: 9pt;">${totalCount}</td><td style="font-family: Helvetica; font-size: 9pt;">${stationList}</td></tr>`;
+                    // Google Sheets: use 12px (equivalent to 9pt) and apply to each cell
+                    htmlData += `<tr><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">${escapeHtml(group.displayName)}</td><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">${totalCount}</td><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">${stationList}</td></tr>`;
                 } else {
                     excelData += `${group.displayName}\t\t\n`;
-                    htmlData += `<tr><td style="font-family: Helvetica; font-size: 9pt;">${escapeHtml(group.displayName)}</td><td style="font-family: Helvetica; font-size: 9pt;"></td><td style="font-family: Helvetica; font-size: 9pt;"></td></tr>`;
+                    htmlData += `<tr><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">${escapeHtml(group.displayName)}</td><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;"></td><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;"></td></tr>`;
                 }
             });
         }
@@ -2289,8 +2292,10 @@ function copySpingridForExcel() {
         }
     });
     
-    // Create HTML version for clipboard (Excel preserves formatting from HTML)
-    let htmlData = '<table>';
+    // Create HTML version for clipboard (Google Sheets compatibility)
+    // Use inline styles on table and cells for Google Sheets compatibility
+    // Google Sheets needs font-size in pixels, not points (12px ≈ 9pt)
+    let htmlData = '<table style="font-family: Helvetica, Arial, sans-serif; font-size: 12px; border-collapse: collapse;">';
     artistList.forEach(artistName => {
         const artistLower = artistName.toLowerCase();
         const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
@@ -2330,9 +2335,10 @@ function copySpingridForExcel() {
                 
                 if (totalCount > 0) {
                     const stationList = formatStationList(Object.entries(aggregatedSpins));
-                    htmlData += `<tr><td style="font-family: Helvetica; font-size: 9pt;">${escapeHtml(group.displayName)}</td><td style="font-family: Helvetica; font-size: 9pt;">${totalCount}</td><td style="font-family: Helvetica; font-size: 9pt;">${stationList}</td></tr>`;
+                    // Google Sheets: use 12px (equivalent to 9pt) and apply to each cell
+                    htmlData += `<tr><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">${escapeHtml(group.displayName)}</td><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">${totalCount}</td><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">${stationList}</td></tr>`;
                 } else {
-                    htmlData += `<tr><td style="font-family: Helvetica; font-size: 9pt;">${escapeHtml(group.displayName)}</td><td style="font-family: Helvetica; font-size: 9pt;"></td><td style="font-family: Helvetica; font-size: 9pt;"></td></tr>`;
+                    htmlData += `<tr><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">${escapeHtml(group.displayName)}</td><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;"></td><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;"></td></tr>`;
                 }
             });
         }
@@ -3292,7 +3298,7 @@ function loadCoreStations() {
                 'WMSE', 'WQFS', 'WRUW', 'KBOO', 'KFJC', 'KZSU', 'KFSR', 'KLSU', 'WTCC', 'CIUT', 'WVUD',
                 'KKFI', 'WRUR', 'WNHU', 'KMUW', 'KDHX', 'KNON', 'KXJZ', 'WKNC', 'WXYC', 'WZBC', 'WVKR',
                 'WKDU', 'KSYM', 'KDVS', 'WXCI', 'KUCR', 'KUCI', 'KVRX', 'WPRK', 'WUOG', 'KCBX', 'WWOZ',
-                'KCUR', 'WUMS', 'KHSU', 'KTUH', 'WXDU', 'WTUL', 'KUNM', 'WMUA', 'WBZC', 'WNUR'
+                'KCUR', 'WUMS', 'KHSU', 'KTUH', 'WXDU', 'WTUL', 'KUNM', 'WMUA', 'WBZC', 'WNUR', 'WYMS'
             ];
             saveCoreStations();
             console.log('Default core stations loaded:', coreStations.length, 'stations');
