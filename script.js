@@ -12,7 +12,6 @@ const FUZZY_THRESHOLD = 0.85; // 85% similarity for fuzzy matching
 
 // Wisdom quotes
 const wisdomQuotes = [
-    { text: "If you have freedom, why not use it, right?", author: "Rory" },
     { text: "The man who moves a mountain begins by carrying away small stones.", author: "Confucius" },
     { text: "When the shoe is heating, it is already hot.", author: "Luke" },
     { text: "It does not matter how slowly you go as long as you do not stop.", author: "Confucius" },
@@ -2293,9 +2292,8 @@ function copySpingridForExcel() {
     });
     
     // Create HTML version for clipboard (Google Sheets compatibility)
-    // Use inline styles on table and cells for Google Sheets compatibility
-    // Google Sheets needs font-size in pixels, not points (12px ≈ 9pt)
-    let htmlData = '<table style="font-family: Helvetica, Arial, sans-serif; font-size: 12px; border-collapse: collapse;">';
+    // Simplified HTML - no font styling, only preserve bold for core stations
+    let htmlData = '<table>';
     artistList.forEach(artistName => {
         const artistLower = artistName.toLowerCase();
         const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
