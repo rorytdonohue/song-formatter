@@ -1250,7 +1250,7 @@ function copyMergedSpingridForExcel() {
     
     // Build both plain text and HTML versions
     let excelData = '';
-    let htmlData = '<table>';
+    let htmlData = '<table style="font-family: Helvetica; font-size: 9pt;">';
     
     // Process each artist from the search list (in order)
     artistList.forEach(artistName => {
@@ -1260,12 +1260,6 @@ function copyMergedSpingridForExcel() {
         const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
             artist.toLowerCase() === artistLower
         );
-        
-        // Add artist header
-        excelData += `\n${artistName.toUpperCase()}\t\t\n`;
-        excelData += `Song\tSpins\tStations\n`;
-        htmlData += `<tr><td colspan="3"><strong>${escapeHtml(artistName.toUpperCase())}</strong></td></tr>`;
-        htmlData += `<tr><td><strong>Song</strong></td><td><strong>Spins</strong></td><td><strong>Stations</strong></td></tr>`;
         
         if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
             // Artist has tracks in database - group by normalized name to handle duplicates
@@ -1309,12 +1303,12 @@ function copyMergedSpingridForExcel() {
                         .join(', ');
                     excelData += `${group.displayName}\t${totalCount}\t${stationListPlain}\n`;
                     
-                    // HTML version with bold formatting
+                    // HTML version with bold formatting and font styling
                     const stationList = formatStationList(Object.entries(aggregatedSpins));
-                    htmlData += `<tr><td>${escapeHtml(group.displayName)}</td><td>${totalCount}</td><td>${stationList}</td></tr>`;
+                    htmlData += `<tr><td style="font-family: Helvetica; font-size: 9pt;">${escapeHtml(group.displayName)}</td><td style="font-family: Helvetica; font-size: 9pt;">${totalCount}</td><td style="font-family: Helvetica; font-size: 9pt;">${stationList}</td></tr>`;
                 } else {
                     excelData += `${group.displayName}\t\t\n`;
-                    htmlData += `<tr><td>${escapeHtml(group.displayName)}</td><td></td><td></td></tr>`;
+                    htmlData += `<tr><td style="font-family: Helvetica; font-size: 9pt;">${escapeHtml(group.displayName)}</td><td style="font-family: Helvetica; font-size: 9pt;"></td><td style="font-family: Helvetica; font-size: 9pt;"></td></tr>`;
                 }
             });
         }
@@ -2214,10 +2208,6 @@ function copySpingridForExcel() {
             artist.toLowerCase() === artistLower
         );
         
-        // Add artist header with column labels
-        excelData += `\n${artistName.toUpperCase()}\t\t\n`;
-        excelData += `Song\tSpins\tStations\n`;
-        
         if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
             // Artist has tracks in database - group by normalized name to handle duplicates
             const songs = tracklistDatabase[tracklistArtist];
@@ -2278,9 +2268,6 @@ function copySpingridForExcel() {
             artist.toLowerCase() === artistLower
         );
         
-        htmlData += `<tr><td colspan="3"><strong>${escapeHtml(artistName.toUpperCase())}</strong></td></tr>`;
-        htmlData += `<tr><td><strong>Song</strong></td><td><strong>Spins</strong></td><td><strong>Stations</strong></td></tr>`;
-        
         if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
             const songs = tracklistDatabase[tracklistArtist];
             const tracklistArtistLower = tracklistArtist.toLowerCase();
@@ -2314,13 +2301,11 @@ function copySpingridForExcel() {
                 
                 if (totalCount > 0) {
                     const stationList = formatStationList(Object.entries(aggregatedSpins));
-                    htmlData += `<tr><td>${escapeHtml(group.displayName)}</td><td>${totalCount}</td><td>${stationList}</td></tr>`;
+                    htmlData += `<tr><td style="font-family: Helvetica; font-size: 9pt;">${escapeHtml(group.displayName)}</td><td style="font-family: Helvetica; font-size: 9pt;">${totalCount}</td><td style="font-family: Helvetica; font-size: 9pt;">${stationList}</td></tr>`;
                 } else {
-                    htmlData += `<tr><td>${escapeHtml(group.displayName)}</td><td></td><td></td></tr>`;
+                    htmlData += `<tr><td style="font-family: Helvetica; font-size: 9pt;">${escapeHtml(group.displayName)}</td><td style="font-family: Helvetica; font-size: 9pt;"></td><td style="font-family: Helvetica; font-size: 9pt;"></td></tr>`;
                 }
             });
-        } else {
-            htmlData += `<tr><td>No tracks in database</td><td>0</td><td>Add tracks to tracklist database</td></tr>`;
         }
     });
     htmlData += '</table>';
