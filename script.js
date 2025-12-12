@@ -2234,112 +2234,75 @@ function formatStationForHTML(stationName, count) {
     return stationHTML;
 }
 
-// Copy spingrid format data for Excel - rebuilt from scratch
+// Copy spingrid format data for Excel - extract directly from displayed spingrid
 function copySpingridForExcel() {
-    // Get artist list
-    const rawArtists = document.getElementById('artistNames').value || '';
-    const artistList = rawArtists
-        .split(/\n|,/)
-        .map(s => s.trim())
-        .filter(s => s.length > 0);
-    
-    if (artistList.length === 0) {
-        alert('no artists entered for search.');
+    const spingridBody = document.getElementById('spingridResultsBody');
+    if (!spingridBody) {
+        alert('No spingrid data to copy. Please run a search first.');
         return;
     }
     
-    // Build spin counts: { artist: { song: { station: count } } }
-    const spinCounts = {};
-    matches.forEach(match => {
-        const normalizedSong = normalizeText(match.song);
-        const normalizedStation = normalizeStationName(match.station);
+    // Extract all song-count-entry divs (skip artist headers and QC sections)
+    const songEntries = spingridBody.querySelectorAll('.song-count-entry');
+    
+    if (songEntries.length === 0) {
+        alert('No data to copy.');
+        return;
+    }
+    
+    // Build table rows from the displayed content
+    const htmlRows = [];
+    
+    songEntries.forEach(entry => {
+        const songCell = entry.querySelector('.song-name-cell');
+        const countCell = entry.querySelector('.count-cell');
+        const stationCell = entry.querySelector('.station-cell');
         
-        if (!spinCounts[match.artist]) spinCounts[match.artist] = {};
-        if (!spinCounts[match.artist][normalizedSong]) spinCounts[match.artist][normalizedSong] = {};
-        if (!spinCounts[match.artist][normalizedSong][normalizedStation]) {
-            spinCounts[match.artist][normalizedSong][normalizedStation] = 0;
+        if (!songCell) return; // Skip if structure is wrong
+        
+        // Get text content and innerHTML for stations (to preserve bold tags)
+        const songText = songCell.textContent.trim();
+        const countText = countCell ? countCell.textContent.trim() : '';
+        
+        // For station cell, get innerHTML to preserve bold tags, but clean it up
+        let stationHTML = '';
+        if (stationCell) {
+            // Clone the station cell to preserve formatting
+            const clone = stationCell.cloneNode(true);
+            // Remove any extra styling/spans but keep bold tags
+            stationHTML = clone.innerHTML;
         }
-        spinCounts[match.artist][normalizedSong][normalizedStation]++;
-    });
-    
-    // Build rows: [{ song, count, stations: [{ name, count }] }]
-    const rows = [];
-    
-    artistList.forEach(artistName => {
-        const artistLower = artistName.toLowerCase();
-        const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
-            artist.toLowerCase() === artistLower
-        );
         
-        if (!tracklistArtist || !tracklistDatabase[tracklistArtist].length) {
-            rows.push({ song: 'No tracks in database', count: 0, stations: [] });
-            return;
+        // Only add rows that have content (skip empty entries)
+        if (songText && songText !== 'No tracks in database') {
+            htmlRows.push(`<tr><td>${escapeHtml(songText)}</td><td>${countText}</td><td>${stationHTML}</td></tr>`);
         }
-        
-        const songs = tracklistDatabase[tracklistArtist];
-        const tracklistArtistLower = tracklistArtist.toLowerCase();
-        const matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
-        
-        // Group songs by normalized name
-        const groupedSongs = {};
-        songs.forEach(songName => {
-            const normalizedSong = normalizeText(songName);
-            if (!groupedSongs[normalizedSong]) {
-                groupedSongs[normalizedSong] = {
-                    displayName: songName,
-                    stations: {}
-                };
-            }
-            
-            // Aggregate spins for this song
-            const songSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedSong];
-            if (songSpins) {
-                Object.entries(songSpins).forEach(([station, count]) => {
-                    if (!groupedSongs[normalizedSong].stations[station]) {
-                        groupedSongs[normalizedSong].stations[station] = 0;
-                    }
-                    groupedSongs[normalizedSong].stations[station] += count;
-                });
-            }
-        });
-        
-        // Convert to rows
-        Object.values(groupedSongs).forEach(group => {
-            const stationEntries = Object.entries(group.stations);
-            const totalCount = stationEntries.reduce((sum, [, count]) => sum + count, 0);
-            
-            rows.push({
-                song: group.displayName,
-                count: totalCount,
-                stations: stationEntries.map(([name, count]) => ({ name, count }))
-            });
-        });
     });
     
-    // Build HTML table - simple and clean
-    let htmlRows = [];
-    rows.forEach(row => {
-        const songCell = escapeHtml(row.song);
-        const countCell = row.count > 0 ? row.count : '';
-        
-        // Build station list with proper bolding
-        const stationParts = row.stations.map(({ name, count }) => 
-            formatStationForHTML(name, count)
-        );
-        const stationCell = stationParts.join(', ');
-        
-        htmlRows.push(`<tr><td>${songCell}</td><td>${countCell}</td><td>${stationCell}</td></tr>`);
-    });
+    if (htmlRows.length === 0) {
+        alert('No data to copy.');
+        return;
+    }
     
     const htmlTable = '<table>' + htmlRows.join('') + '</table>';
     const htmlContent = '<html><body>' + htmlTable + '</body></html>';
     
     // Build plain text version for fallback
-    const textRows = rows.map(row => {
-        const stationText = row.stations
-            .map(({ name, count }) => count > 1 ? `${name} (${count})` : name)
-            .join(', ');
-        return `${row.song}\t${row.count}\t${stationText}`;
+    const textRows = [];
+    songEntries.forEach(entry => {
+        const songCell = entry.querySelector('.song-name-cell');
+        const countCell = entry.querySelector('.count-cell');
+        const stationCell = entry.querySelector('.station-cell');
+        
+        if (!songCell) return;
+        
+        const songText = songCell.textContent.trim();
+        const countText = countCell ? countCell.textContent.trim() : '';
+        const stationText = stationCell ? stationCell.textContent.trim() : '';
+        
+        if (songText && songText !== 'No tracks in database') {
+            textRows.push(`${songText}\t${countText}\t${stationText}`);
+        }
     });
     const textContent = textRows.join('\n');
     
