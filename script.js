@@ -720,14 +720,12 @@ function displaySpingridFormat(matches, containerId) {
                 if (songSpins) {
                     // Song has spins - show count and stations
                     const totalCount = Object.values(songSpins).reduce((sum, count) => sum + count, 0);
-                    const stationList = Object.entries(songSpins)
-                        .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
-                        .join(', ');
+                    const stationList = formatStationList(Object.entries(songSpins));
                     
                     html += `<div class="song-count-entry">`;
                     html += `<span class="song-name-cell">${escapeHtml(songName)}</span>`;
                     html += `<span class="count-cell">${totalCount}</span>`;
-                    html += `<span class="station-cell">${escapeHtml(stationList)}</span>`;
+                    html += `<span class="station-cell">${stationList}</span>`;
                     html += `</div>`;
                 } else {
                     // Song has no spins - show empty
@@ -1242,13 +1240,17 @@ function copyMergedSpingridForExcel() {
         if (!spinCounts[match.artist][normalizedSong]) {
             spinCounts[match.artist][normalizedSong] = {};
         }
-        if (!spinCounts[match.artist][normalizedSong][match.station]) {
-            spinCounts[match.artist][normalizedSong][match.station] = 0;
+        // Normalize station name for grouping (e.g., WKNC HD2 -> WKNC)
+        const normalizedStation = normalizeStationName(match.station);
+        if (!spinCounts[match.artist][normalizedSong][normalizedStation]) {
+            spinCounts[match.artist][normalizedSong][normalizedStation] = 0;
         }
-        spinCounts[match.artist][normalizedSong][match.station]++;
+        spinCounts[match.artist][normalizedSong][normalizedStation]++;
     });
     
+    // Build both plain text and HTML versions
     let excelData = '';
+    let htmlData = '<table>';
     
     // Process each artist from the search list (in order)
     artistList.forEach(artistName => {
@@ -1258,6 +1260,12 @@ function copyMergedSpingridForExcel() {
         const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
             artist.toLowerCase() === artistLower
         );
+        
+        // Add artist header
+        excelData += `\n${artistName.toUpperCase()}\t\t\n`;
+        excelData += `Song\tSpins\tStations\n`;
+        htmlData += `<tr><td colspan="3"><strong>${escapeHtml(artistName.toUpperCase())}</strong></td></tr>`;
+        htmlData += `<tr><td><strong>Song</strong></td><td><strong>Spins</strong></td><td><strong>Stations</strong></td></tr>`;
         
         if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
             // Artist has tracks in database - group by normalized name to handle duplicates
@@ -1295,23 +1303,43 @@ function copyMergedSpingridForExcel() {
                 const totalCount = Object.values(aggregatedSpins).reduce((sum, count) => sum + count, 0);
                 
                 if (totalCount > 0) {
-                    const stationList = Object.entries(aggregatedSpins)
+                    // Plain text version
+                    const stationListPlain = Object.entries(aggregatedSpins)
                         .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
                         .join(', ');
-                    excelData += `${group.displayName}\t${totalCount}\t${stationList}\n`;
+                    excelData += `${group.displayName}\t${totalCount}\t${stationListPlain}\n`;
+                    
+                    // HTML version with bold formatting
+                    const stationList = formatStationList(Object.entries(aggregatedSpins));
+                    htmlData += `<tr><td>${escapeHtml(group.displayName)}</td><td>${totalCount}</td><td>${stationList}</td></tr>`;
                 } else {
                     excelData += `${group.displayName}\t\t\n`;
+                    htmlData += `<tr><td>${escapeHtml(group.displayName)}</td><td></td><td></td></tr>`;
                 }
             });
         }
     });
+    htmlData += '</table>';
     
-    // Copy to clipboard
-    navigator.clipboard.writeText(excelData).then(() => {
-        alert('merged spingrid data copied to clipboard!');
+    // Copy to clipboard with both HTML and plain text formats
+    const htmlBlob = new Blob([htmlData], { type: 'text/html' });
+    const textBlob = new Blob([excelData], { type: 'text/plain' });
+    const clipboardItem = new ClipboardItem({
+        'text/html': htmlBlob,
+        'text/plain': textBlob
+    });
+    
+    navigator.clipboard.write([clipboardItem]).then(() => {
+        alert('Merged spingrid data copied to clipboard! Paste into Excel and formatting (including bold core stations) will be preserved.');
     }).catch(err => {
         console.error('Failed to copy: ', err);
-        alert('failed to copy to clipboard. please try again.');
+        // Fallback to plain text
+        navigator.clipboard.writeText(excelData).then(() => {
+            alert('Merged spingrid data copied to clipboard (plain text). Paste into Excel.');
+        }).catch(err2 => {
+            console.error('Failed to copy: ', err2);
+            alert('failed to copy to clipboard. please try again.');
+        });
     });
 }
 
@@ -2226,10 +2254,12 @@ function copySpingridForExcel() {
                 const totalCount = Object.values(aggregatedSpins).reduce((sum, count) => sum + count, 0);
                 
                 if (totalCount > 0) {
-                    const stationList = Object.entries(aggregatedSpins)
+                    // Use HTML formatting for stations (Excel will preserve bold when pasting HTML)
+                    const stationList = formatStationList(Object.entries(aggregatedSpins));
+                    const stationListPlain = Object.entries(aggregatedSpins)
                         .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
                         .join(', ');
-                    excelData += `${group.displayName}\t${totalCount}\t${stationList}\n`;
+                    excelData += `${group.displayName}\t${totalCount}\t${stationListPlain}\n`;
                 } else {
                     excelData += `${group.displayName}\t\t\n`;
                 }
@@ -2240,12 +2270,80 @@ function copySpingridForExcel() {
         }
     });
     
-    // Copy to clipboard
-    navigator.clipboard.writeText(excelData).then(() => {
-        alert('Spingrid data copied to clipboard! Paste into Excel and it will format correctly across columns.');
+    // Create HTML version for clipboard (Excel preserves formatting from HTML)
+    let htmlData = '<table>';
+    artistList.forEach(artistName => {
+        const artistLower = artistName.toLowerCase();
+        const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
+            artist.toLowerCase() === artistLower
+        );
+        
+        htmlData += `<tr><td colspan="3"><strong>${escapeHtml(artistName.toUpperCase())}</strong></td></tr>`;
+        htmlData += `<tr><td><strong>Song</strong></td><td><strong>Spins</strong></td><td><strong>Stations</strong></td></tr>`;
+        
+        if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
+            const songs = tracklistDatabase[tracklistArtist];
+            const tracklistArtistLower = tracklistArtist.toLowerCase();
+            const groupedSongs = {};
+            
+            songs.forEach(songName => {
+                const normalizedSong = normalizeText(songName);
+                if (!groupedSongs[normalizedSong]) {
+                    groupedSongs[normalizedSong] = {
+                        displayName: songName,
+                        aggregatedSpins: {}
+                    };
+                }
+                
+                const matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
+                const songSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedSong];
+                
+                if (songSpins) {
+                    Object.entries(songSpins).forEach(([station, count]) => {
+                        if (!groupedSongs[normalizedSong].aggregatedSpins[station]) {
+                            groupedSongs[normalizedSong].aggregatedSpins[station] = 0;
+                        }
+                        groupedSongs[normalizedSong].aggregatedSpins[station] += count;
+                    });
+                }
+            });
+            
+            Object.entries(groupedSongs).forEach(([normalizedKey, group]) => {
+                const aggregatedSpins = group.aggregatedSpins;
+                const totalCount = Object.values(aggregatedSpins).reduce((sum, count) => sum + count, 0);
+                
+                if (totalCount > 0) {
+                    const stationList = formatStationList(Object.entries(aggregatedSpins));
+                    htmlData += `<tr><td>${escapeHtml(group.displayName)}</td><td>${totalCount}</td><td>${stationList}</td></tr>`;
+                } else {
+                    htmlData += `<tr><td>${escapeHtml(group.displayName)}</td><td></td><td></td></tr>`;
+                }
+            });
+        } else {
+            htmlData += `<tr><td>No tracks in database</td><td>0</td><td>Add tracks to tracklist database</td></tr>`;
+        }
+    });
+    htmlData += '</table>';
+    
+    // Copy to clipboard with both HTML and plain text formats
+    const htmlBlob = new Blob([htmlData], { type: 'text/html' });
+    const textBlob = new Blob([excelData], { type: 'text/plain' });
+    const clipboardItem = new ClipboardItem({
+        'text/html': htmlBlob,
+        'text/plain': textBlob
+    });
+    
+    navigator.clipboard.write([clipboardItem]).then(() => {
+        alert('Spingrid data copied to clipboard! Paste into Excel and formatting (including bold core stations) will be preserved.');
     }).catch(err => {
         console.error('Failed to copy: ', err);
-        alert('failed to copy to clipboard. please try again.');
+        // Fallback to plain text
+        navigator.clipboard.writeText(excelData).then(() => {
+            alert('Spingrid data copied to clipboard (plain text). Paste into Excel.');
+        }).catch(err2 => {
+            console.error('Failed to copy: ', err2);
+            alert('failed to copy to clipboard. please try again.');
+        });
     });
 }
 
@@ -3135,10 +3233,26 @@ function loadCoreStations() {
         const stored = localStorage.getItem('coreStations');
         if (stored) {
             coreStations = JSON.parse(stored);
-            console.log('Core stations loaded from localStorage:', coreStations);
+            console.log('Core stations loaded from localStorage:', coreStations.length, 'stations');
         } else {
-            coreStations = [];
-            console.log('No core stations found in localStorage');
+            // Default core stations list (from CSV - exact match)
+            coreStations = [
+                'WKSU', 'WDET', 'CBC Radio 3', 'WYEP', 'WXPN', 'KXLU', 'KCSN', 'FolkAlley.com', 'Echoes',
+                'SiriusXM The Loft', 'WFUV', 'KEXP', 'K.C.R.W', 'Out Of The Woods / Folk', 'KCMP', 'SiriusXMU',
+                'CHUO', 'WFMU', 'WHRB', 'WHRV', 'WORT', 'WRSU', 'WJCU', 'WYSO', 'CISM', 'KFAI', 'KRCC',
+                'KRCL', 'CJAM', 'CJSW', 'CKCU', 'CKUT', 'KALX', 'KCSB', 'KSJS', 'KTCU', 'WDSE', 'KUOM',
+                'CITR', 'KUTX', 'KXCI', 'WMBR', 'WOXY', 'KOPN', 'WPGU', 'KRVM', 'NCPR / WSLU', 'WONC',
+                'WUNH', 'WERS', 'KJHK', 'KZSC', 'WCBN', 'WTSR', 'CHRW', 'WRIU', 'KAXE', 'WBWC', 'WBGO',
+                'High Plains Public Radio', 'WAMC', 'KPFT', 'WDBM', 'WPRB', 'CKUA', 'KACV', 'Indie102.3',
+                'WFDU', 'WRCT', 'WMNF', 'WRPI', 'KSPC', 'WNYU', 'WSOU', 'Iowa Public Radio', 'KUVO',
+                'WBER', 'WRFL', 'WVFS', 'WVUM', 'WUSC', 'KCSU', 'KPFA', 'WREK', 'KXLU', 'WUTK', 'WYXR',
+                'WMSE', 'WQFS', 'WRUW', 'KBOO', 'KFJC', 'KZSU', 'KFSR', 'KLSU', 'WTCC', 'CIUT', 'WVUD',
+                'KKFI', 'WRUR', 'WNHU', 'KMUW', 'KDHX', 'KNON', 'KXJZ', 'WKNC', 'WXYC', 'WZBC', 'WVKR',
+                'WKDU', 'KSYM', 'KDVS', 'WXCI', 'KUCR', 'KUCI', 'KVRX', 'WPRK', 'WUOG', 'KCBX', 'WWOZ',
+                'KCUR', 'WUMS', 'KHSU', 'KTUH', 'WXDU', 'WTUL', 'KUNM', 'WMUA', 'WBZC', 'WNUR'
+            ];
+            saveCoreStations();
+            console.log('Default core stations loaded:', coreStations.length, 'stations');
         }
     } catch (e) {
         console.error('Error loading core stations:', e);
@@ -3164,18 +3278,34 @@ function normalizeStationName(stationName) {
 
 // Format station name - bold if it's a core station
 function formatStationName(stationName) {
+    if (!stationName) return escapeHtml(stationName);
+    if (!coreStations || coreStations.length === 0) {
+        return escapeHtml(stationName);
+    }
+    
     // Check if this station (or any part of it) is a core station
     // Handle cases like "KEXP [DJ Name]" or "Station (2)" or "WKNC HD2"
     const stationBase = stationName.split(' [')[0].split(' (')[0].trim();
     const normalizedStation = normalizeStationName(stationBase);
+    const stationLower = normalizedStation.toLowerCase();
     
     const isCore = coreStations.some(core => {
+        if (!core) return false;
         const coreLower = core.toLowerCase().trim();
-        const stationLower = normalizedStation.toLowerCase();
-        // Exact match or station starts with core name (with or without space)
-        return stationLower === coreLower || 
-               stationLower.startsWith(coreLower + ' ') ||
-               stationLower.startsWith(coreLower);
+        // Handle "K.C.R.W" -> "KCRW" normalization
+        const coreNormalized = coreLower.replace(/\./g, '');
+        const stationNormalized = stationLower.replace(/\./g, '');
+        
+        // Exact match (with or without dots)
+        if (stationNormalized === coreNormalized || stationLower === coreLower) return true;
+        // Station starts with core name followed by space (e.g., "WKNC HD2" matches "WKNC")
+        if (stationNormalized.startsWith(coreNormalized + ' ') || stationLower.startsWith(coreLower + ' ')) return true;
+        // For compound stations like "NCPR / WSLU", check if core matches either part
+        if (stationLower.includes('/')) {
+            const parts = stationLower.split('/').map(p => p.trim().replace(/\./g, ''));
+            if (parts.includes(coreNormalized)) return true;
+        }
+        return false;
     });
     
     if (isCore) {
@@ -3191,6 +3321,49 @@ function formatStationList(stationEntries) {
         .map(([station, count]) => {
             const displayName = count > 1 ? `${station} (${count})` : station;
             return formatStationName(displayName);
+        })
+        .join(', ');
+}
+
+// Format station name for RTF (Rich Text Format) - bold if it's a core station
+function formatStationNameRTF(stationName) {
+    if (!stationName) return stationName;
+    if (!coreStations || coreStations.length === 0) {
+        return stationName;
+    }
+    
+    const stationBase = stationName.split(' [')[0].split(' (')[0].trim();
+    const normalizedStation = normalizeStationName(stationBase);
+    const stationLower = normalizedStation.toLowerCase();
+    
+    const isCore = coreStations.some(core => {
+        if (!core) return false;
+        const coreLower = core.toLowerCase().trim();
+        const coreNormalized = coreLower.replace(/\./g, '');
+        const stationNormalized = stationLower.replace(/\./g, '');
+        
+        if (stationNormalized === coreNormalized || stationLower === coreLower) return true;
+        if (stationNormalized.startsWith(coreNormalized + ' ') || stationLower.startsWith(coreLower + ' ')) return true;
+        if (stationLower.includes('/')) {
+            const parts = stationLower.split('/').map(p => p.trim().replace(/\./g, ''));
+            if (parts.includes(coreNormalized)) return true;
+        }
+        return false;
+    });
+    
+    if (isCore) {
+        // RTF format: \b for bold start, \b0 for bold end
+        return `{\\b ${stationName}\\b0}`;
+    }
+    return stationName;
+}
+
+// Format a list of stations for RTF (for Excel paste with formatting)
+function formatStationListRTF(stationEntries) {
+    return stationEntries
+        .map(([station, count]) => {
+            const displayName = count > 1 ? `${station} (${count})` : station;
+            return formatStationNameRTF(displayName);
         })
         .join(', ');
 }
