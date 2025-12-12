@@ -687,10 +687,12 @@ function displaySpingridFormat(matches, containerId) {
         if (!spinCounts[match.artist][match.song]) {
             spinCounts[match.artist][match.song] = {};
         }
-        if (!spinCounts[match.artist][match.song][match.station]) {
-            spinCounts[match.artist][match.song][match.station] = 0;
+        // Normalize station name for grouping (e.g., WKNC HD2 -> WKNC)
+        const normalizedStation = normalizeStationName(match.station);
+        if (!spinCounts[match.artist][match.song][normalizedStation]) {
+            spinCounts[match.artist][match.song][normalizedStation] = 0;
         }
-        spinCounts[match.artist][match.song][match.station]++;
+        spinCounts[match.artist][match.song][normalizedStation]++;
     });
     
     let html = '';
@@ -937,10 +939,13 @@ function displaySpingridFormatInContainer(matches, container) {
             songNameMap[match.artist][normalizedSong] = match.song;
         }
         
-        if (!spinCounts[match.artist][normalizedSong][match.station]) {
-            spinCounts[match.artist][normalizedSong][match.station] = 0;
+        // Normalize station name for grouping (e.g., WKNC HD2 -> WKNC)
+        const normalizedStation = normalizeStationName(match.station);
+        
+        if (!spinCounts[match.artist][normalizedSong][normalizedStation]) {
+            spinCounts[match.artist][normalizedSong][normalizedStation] = 0;
         }
-        spinCounts[match.artist][normalizedSong][match.station]++;
+        spinCounts[match.artist][normalizedSong][normalizedStation]++;
     });
     
     let html = '';
@@ -1902,10 +1907,13 @@ function displaySpingridFormat(matches) {
             songNameMap[match.artist][normalizedSong] = match.song;
         }
         
-        if (!spinCounts[match.artist][normalizedSong][match.station]) {
-            spinCounts[match.artist][normalizedSong][match.station] = 0;
+        // Normalize station name for grouping (e.g., WKNC HD2 -> WKNC)
+        const normalizedStation = normalizeStationName(match.station);
+        
+        if (!spinCounts[match.artist][normalizedSong][normalizedStation]) {
+            spinCounts[match.artist][normalizedSong][normalizedStation] = 0;
         }
-        spinCounts[match.artist][normalizedSong][match.station]++;
+        spinCounts[match.artist][normalizedSong][normalizedStation]++;
     });
     
     let html = '';
@@ -2159,10 +2167,12 @@ function copySpingridForExcel() {
         if (!spinCounts[match.artist][normalizedSong]) {
             spinCounts[match.artist][normalizedSong] = {};
         }
-        if (!spinCounts[match.artist][normalizedSong][match.station]) {
-            spinCounts[match.artist][normalizedSong][match.station] = 0;
+        // Normalize station name for grouping (e.g., WKNC HD2 -> WKNC)
+        const normalizedStation = normalizeStationName(match.station);
+        if (!spinCounts[match.artist][normalizedSong][normalizedStation]) {
+            spinCounts[match.artist][normalizedSong][normalizedStation] = 0;
         }
-        spinCounts[match.artist][normalizedSong][match.station]++;
+        spinCounts[match.artist][normalizedSong][normalizedStation]++;
     });
     
     let excelData = '';
@@ -3128,6 +3138,7 @@ function loadCoreStations() {
             console.log('Core stations loaded from localStorage:', coreStations);
         } else {
             coreStations = [];
+            console.log('No core stations found in localStorage');
         }
     } catch (e) {
         console.error('Error loading core stations:', e);
@@ -3144,15 +3155,27 @@ function saveCoreStations() {
     }
 }
 
+// Normalize station name for grouping (e.g., "WKNC HD2" -> "WKNC")
+function normalizeStationName(stationName) {
+    if (!stationName) return stationName;
+    // Remove HD2, HD3, etc. suffixes and normalize
+    return stationName.replace(/\s+HD\d+$/i, '').trim();
+}
+
 // Format station name - bold if it's a core station
 function formatStationName(stationName) {
     // Check if this station (or any part of it) is a core station
-    // Handle cases like "KEXP [DJ Name]" or "Station (2)"
+    // Handle cases like "KEXP [DJ Name]" or "Station (2)" or "WKNC HD2"
     const stationBase = stationName.split(' [')[0].split(' (')[0].trim();
+    const normalizedStation = normalizeStationName(stationBase);
+    
     const isCore = coreStations.some(core => {
         const coreLower = core.toLowerCase().trim();
-        const stationLower = stationBase.toLowerCase();
-        return stationLower === coreLower || stationLower.includes(coreLower) || coreLower.includes(stationLower);
+        const stationLower = normalizedStation.toLowerCase();
+        // Exact match or station starts with core name (with or without space)
+        return stationLower === coreLower || 
+               stationLower.startsWith(coreLower + ' ') ||
+               stationLower.startsWith(coreLower);
     });
     
     if (isCore) {
