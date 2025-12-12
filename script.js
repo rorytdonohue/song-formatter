@@ -1315,8 +1315,28 @@ function copyMergedSpingridForExcel() {
     });
     htmlData += '</table>';
     
+    // Create Excel-compatible HTML clipboard format
+    // Excel requires specific HTML structure with proper headers
+    const htmlHeader = 'Version:1.0\r\nStartHTML:0000000100\r\nEndHTML:0000000000\r\nStartFragment:0000000100\r\nEndFragment:0000000000\r\n';
+    const htmlStart = '<html><body>\r\n<!--StartFragment-->\r\n';
+    const htmlEnd = '\r\n<!--EndFragment-->\r\n</body></html>';
+    const fullHtml = htmlHeader + htmlStart + htmlData + htmlEnd;
+    
+    // Calculate positions for Excel clipboard format
+    const startHtmlPos = fullHtml.indexOf('<html>');
+    const endHtmlPos = fullHtml.length;
+    const startFragPos = fullHtml.indexOf('<!--StartFragment-->') + '<!--StartFragment-->'.length;
+    const endFragPos = fullHtml.indexOf('<!--EndFragment-->');
+    
+    // Replace placeholders with actual positions
+    const finalHtml = fullHtml
+        .replace('StartHTML:0000000100', `StartHTML:${String(startHtmlPos).padStart(10, '0')}`)
+        .replace('EndHTML:0000000000', `EndHTML:${String(endHtmlPos).padStart(10, '0')}`)
+        .replace('StartFragment:0000000100', `StartFragment:${String(startFragPos).padStart(10, '0')}`)
+        .replace('EndFragment:0000000000', `EndFragment:${String(endFragPos).padStart(10, '0')}`);
+    
     // Copy to clipboard with both HTML and plain text formats
-    const htmlBlob = new Blob([htmlData], { type: 'text/html' });
+    const htmlBlob = new Blob([finalHtml], { type: 'text/html' });
     const textBlob = new Blob([excelData], { type: 'text/plain' });
     const clipboardItem = new ClipboardItem({
         'text/html': htmlBlob,
@@ -2310,8 +2330,28 @@ function copySpingridForExcel() {
     });
     htmlData += '</table>';
     
+    // Create Excel-compatible HTML clipboard format
+    // Excel requires specific HTML structure with proper headers
+    const htmlHeader = 'Version:1.0\r\nStartHTML:0000000100\r\nEndHTML:0000000000\r\nStartFragment:0000000100\r\nEndFragment:0000000000\r\n';
+    const htmlStart = '<html><body>\r\n<!--StartFragment-->\r\n';
+    const htmlEnd = '\r\n<!--EndFragment-->\r\n</body></html>';
+    const fullHtml = htmlHeader + htmlStart + htmlData + htmlEnd;
+    
+    // Calculate positions for Excel clipboard format
+    const startHtmlPos = fullHtml.indexOf('<html>');
+    const endHtmlPos = fullHtml.length;
+    const startFragPos = fullHtml.indexOf('<!--StartFragment-->') + '<!--StartFragment-->'.length;
+    const endFragPos = fullHtml.indexOf('<!--EndFragment-->');
+    
+    // Replace placeholders with actual positions
+    const finalHtml = fullHtml
+        .replace('StartHTML:0000000100', `StartHTML:${String(startHtmlPos).padStart(10, '0')}`)
+        .replace('EndHTML:0000000000', `EndHTML:${String(endHtmlPos).padStart(10, '0')}`)
+        .replace('StartFragment:0000000100', `StartFragment:${String(startFragPos).padStart(10, '0')}`)
+        .replace('EndFragment:0000000000', `EndFragment:${String(endFragPos).padStart(10, '0')}`);
+    
     // Copy to clipboard with both HTML and plain text formats
-    const htmlBlob = new Blob([htmlData], { type: 'text/html' });
+    const htmlBlob = new Blob([finalHtml], { type: 'text/html' });
     const textBlob = new Blob([excelData], { type: 'text/plain' });
     const clipboardItem = new ClipboardItem({
         'text/html': htmlBlob,
@@ -3300,12 +3340,18 @@ function formatStationName(stationName) {
 }
 
 // Format a list of stations (comma-separated) with core stations bolded
+// Only bold the station name, not the count
 function formatStationList(stationEntries) {
     // stationEntries is an array of [station, count] pairs
     return stationEntries
         .map(([station, count]) => {
-            const displayName = count > 1 ? `${station} (${count})` : station;
-            return formatStationName(displayName);
+            if (count > 1) {
+                // Format as "Station (count)" - only bold the station name part
+                const stationFormatted = formatStationName(station);
+                return `${stationFormatted} (${count})`;
+            } else {
+                return formatStationName(station);
+            }
         })
         .join(', ');
 }
