@@ -1969,6 +1969,9 @@ function displaySpingridFormat(matches) {
         spinCounts[match.artist][normalizedSong][normalizedStation]++;
     });
     
+    // Build TSV string for Excel/Sheets copy
+    let tsvOutput = "Song Title\tTotal Spins\tStations\n";
+    
     // Build HTML table with proper styling for Google Sheets
     const tableStyle = 'font-family: Helvetica, Arial, sans-serif; font-size: 9pt; border-collapse: collapse; width: 100%; border: 1px solid #ddd;';
     const songCellStyle = 'text-align: center; vertical-align: middle; word-wrap: break-word; padding: 4px; border: 1px solid #ddd;';
@@ -2084,6 +2087,7 @@ function displaySpingridFormat(matches) {
                 const group = parentGroups[parentSong];
                 const totalCount = Object.values(group.spins).reduce((sum, count) => sum + count, 0);
                 const stationList = totalCount > 0 ? formatStationList(Object.entries(group.spins)) : '';
+                const stationListTSV = totalCount > 0 ? formatStationListTSV(Object.entries(group.spins)) : '';
                 
                 // Show parent track
                 html += `<tr>`;
@@ -2091,6 +2095,9 @@ function displaySpingridFormat(matches) {
                 html += `<td style="${countCellStyle}">${totalCount > 0 ? totalCount : ''}</td>`;
                 html += `<td style="${stationCellStyle}">${stationList}</td>`;
                 html += `</tr>`;
+                
+                // Add to TSV
+                tsvOutput += `${parentSong}\t${totalCount > 0 ? totalCount : ''}\t${stationListTSV}\n`;
                 
                 // Show variants indented under parent
                 if (group.variants.length > 0) {
@@ -2101,12 +2108,16 @@ function displaySpingridFormat(matches) {
                         const variantSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedVariant];
                         const variantCount = variantSpins ? Object.values(variantSpins).reduce((sum, count) => sum + count, 0) : 0;
                         const variantStationList = variantSpins && variantCount > 0 ? formatStationList(Object.entries(variantSpins)) : '';
+                        const variantStationListTSV = variantSpins && variantCount > 0 ? formatStationListTSV(Object.entries(variantSpins)) : '';
                         
                         html += `<tr>`;
                         html += `<td style="${songCellStyle}">→ ${escapeHtml(variantSong)}</td>`;
                         html += `<td style="${countCellStyle}">${variantCount > 0 ? variantCount : ''}</td>`;
                         html += `<td style="${stationCellStyle}">${variantStationList}</td>`;
                         html += `</tr>`;
+                        
+                        // Add to TSV
+                        tsvOutput += `${variantSong}\t${variantCount > 0 ? variantCount : ''}\t${variantStationListTSV}\n`;
                     });
                 }
             });
@@ -2144,12 +2155,16 @@ function displaySpingridFormat(matches) {
                 if (totalCount > 0) {
                     // Song has spins - show count and stations
                     const stationList = formatStationList(Object.entries(aggregatedSpins));
+                    const stationListTSV = formatStationListTSV(Object.entries(aggregatedSpins));
                     
                     html += `<tr>`;
                     html += `<td style="${songCellStyle}">${escapeHtml(group.displayName)}</td>`;
                     html += `<td style="${countCellStyle}">${totalCount}</td>`;
                     html += `<td style="${stationCellStyle}">${stationList}</td>`;
                     html += `</tr>`;
+                    
+                    // Add to TSV
+                    tsvOutput += `${group.displayName}\t${totalCount}\t${stationListTSV}\n`;
                 } else {
                     // Song has no spins - show empty
                     html += `<tr>`;
@@ -2157,6 +2172,9 @@ function displaySpingridFormat(matches) {
                     html += `<td style="${countCellStyle}"></td>`;
                     html += `<td style="${stationCellStyle}"></td>`;
                     html += `</tr>`;
+                    
+                    // Add to TSV
+                    tsvOutput += `${group.displayName}\t\t\n`;
                 }
             });
         } else {
@@ -2166,6 +2184,9 @@ function displaySpingridFormat(matches) {
             html += `<td style="${countCellStyle}">0</td>`;
             html += `<td style="${stationCellStyle}">Add tracks to tracklist database</td>`;
             html += `</tr>`;
+            
+            // Add to TSV (skip this row in TSV as it's not a real song)
+            // tsvOutput += `No tracks in database\t0\tAdd tracks to tracklist database\n`;
         }
     });
     
@@ -2200,6 +2221,9 @@ function displaySpingridFormat(matches) {
     });
     
     spingridResultsBody.innerHTML = html + qcHtml;
+    
+    // Store TSV output in a data attribute on the results body for the copy function
+    spingridResultsBody.setAttribute('data-tsv-output', tsvOutput);
 }
 
 // Helper: Check if a station is a core station
@@ -2243,7 +2267,7 @@ function formatStationForHTML(stationName, count) {
     return stationHTML;
 }
 
-// Copy spingrid format data for Excel - extract table directly
+// Copy spingrid format data for Excel - use TSV string
 function copySpingridForExcel() {
     const spingridBody = document.getElementById('spingridResultsBody');
     if (!spingridBody) {
@@ -2251,79 +2275,19 @@ function copySpingridForExcel() {
         return;
     }
     
-    // Get the table directly
-    const table = spingridBody.querySelector('#spingridTable');
-    if (!table) {
-        alert('No spingrid table found. Please run a search first.');
+    // Get the TSV string from data attribute
+    const tsvOutput = spingridBody.getAttribute('data-tsv-output');
+    if (!tsvOutput) {
+        alert('No spingrid data to copy. Please run a search first.');
         return;
     }
     
-    // Clone the table to preserve all formatting
-    const clonedTable = table.cloneNode(true);
-    const htmlTable = clonedTable.outerHTML;
-    const htmlContent = '<html><body>' + htmlTable + '</body></html>';
-    
-    // Build plain text version for fallback
-    const textRows = [];
-    const rows = table.querySelectorAll('tr');
-    rows.forEach(row => {
-        const cells = row.querySelectorAll('td');
-        if (cells.length >= 3) {
-            const songText = cells[0].textContent.trim();
-            const countText = cells[1].textContent.trim();
-            const stationText = cells[2].textContent.trim();
-            if (songText && songText !== 'No tracks in database') {
-                textRows.push(`${songText}\t${countText}\t${stationText}`);
-            }
-        }
-    });
-    const textContent = textRows.join('\n');
-    
-    // Copy to clipboard using ClipboardItem API
-    const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
-    const textBlob = new Blob([textContent], { type: 'text/plain' });
-    
-    navigator.clipboard.write([
-        new ClipboardItem({
-            'text/html': htmlBlob,
-            'text/plain': textBlob
-        })
-    ]).then(() => {
-        alert('Spingrid data copied to clipboard! Paste into Google Sheets and formatting (including bold core stations) will be preserved.');
+    // Copy TSV string to clipboard
+    navigator.clipboard.writeText(tsvOutput).then(() => {
+        alert('Spingrid data copied to clipboard! Paste into Google Sheets or Excel.');
     }).catch(err => {
-        console.error('ClipboardItem failed:', err);
-        
-        // Fallback: Use execCommand with DOM element
-        const tempDiv = document.createElement('div');
-        tempDiv.style.position = 'fixed';
-        tempDiv.style.left = '-9999px';
-        tempDiv.innerHTML = htmlTable;
-        document.body.appendChild(tempDiv);
-        
-        const range = document.createRange();
-        range.selectNodeContents(tempDiv);
-        const selection = window.getSelection();
-        selection.removeAllRanges();
-        selection.addRange(range);
-        
-        try {
-            document.execCommand('copy');
-            selection.removeAllRanges();
-            document.body.removeChild(tempDiv);
-            alert('Spingrid data copied to clipboard! Paste into Google Sheets.');
-        } catch (err2) {
-            console.error('execCommand failed:', err2);
-            selection.removeAllRanges();
-            document.body.removeChild(tempDiv);
-            
-            // Final fallback: plain text
-            navigator.clipboard.writeText(textContent).then(() => {
-                alert('Spingrid data copied (plain text). Paste into Google Sheets.');
-            }).catch(err3 => {
-                console.error('All copy methods failed:', err3);
-                alert('Failed to copy to clipboard. Please try again.');
-            });
-        }
+        console.error('Clipboard write failed:', err);
+        alert('Failed to copy to clipboard. Please try again.');
     });
 }
 
@@ -3317,6 +3281,26 @@ function formatStationList(stationEntries) {
                 return `${stationFormatted} (${count})`;
             } else {
                 return formatStationName(station);
+            }
+        })
+        .filter(s => s.length > 0)
+        .join(', ');
+}
+
+// Format station list for TSV (plain text, no HTML)
+function formatStationListTSV(stationEntries) {
+    if (!stationEntries || stationEntries.length === 0) {
+        return '';
+    }
+    // stationEntries is an array of [station, count] pairs
+    // Use raw station names (no HTML formatting)
+    return stationEntries
+        .map(([station, count]) => {
+            if (!station) return '';
+            if (count > 1) {
+                return `${station} (${count})`;
+            } else {
+                return station;
             }
         })
         .filter(s => s.length > 0)
