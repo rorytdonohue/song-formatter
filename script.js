@@ -2335,10 +2335,10 @@ function copySpingridForExcel() {
                 
                 if (totalCount > 0) {
                     const stationList = formatStationList(Object.entries(aggregatedSpins));
-                    // Google Sheets: use 12px (equivalent to 9pt) and apply to each cell
-                    htmlData += `<tr><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">${escapeHtml(group.displayName)}</td><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">${totalCount}</td><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">${stationList}</td></tr>`;
+                    // No font styling - let Google Sheets use its default, only preserve bold for core stations
+                    htmlData += `<tr><td>${escapeHtml(group.displayName)}</td><td>${totalCount}</td><td>${stationList}</td></tr>`;
                 } else {
-                    htmlData += `<tr><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;">${escapeHtml(group.displayName)}</td><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;"></td><td style="font-family: Helvetica, Arial, sans-serif; font-size: 12px;"></td></tr>`;
+                    htmlData += `<tr><td>${escapeHtml(group.displayName)}</td><td></td><td></td></tr>`;
                 }
             });
         }
@@ -3373,9 +3373,13 @@ function formatStationName(stationName) {
 // Format a list of stations (comma-separated) with core stations bolded
 // Only bold the station name, not the count
 function formatStationList(stationEntries) {
+    if (!stationEntries || stationEntries.length === 0) {
+        return '';
+    }
     // stationEntries is an array of [station, count] pairs
     return stationEntries
         .map(([station, count]) => {
+            if (!station) return '';
             if (count > 1) {
                 // Format as "Station (count)" - only bold the station name part
                 const stationFormatted = formatStationName(station);
@@ -3384,6 +3388,7 @@ function formatStationList(stationEntries) {
                 return formatStationName(station);
             }
         })
+        .filter(s => s.length > 0)
         .join(', ');
 }
 
