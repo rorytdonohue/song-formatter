@@ -2193,9 +2193,50 @@ function displaySpingridFormat(matches) {
     spingridResultsBody.innerHTML = html;
 }
 
-// Copy spingrid format data for Excel
+// Helper: Check if a station is a core station
+function isCoreStation(stationName) {
+    if (!stationName || !coreStations || coreStations.length === 0) return false;
+    
+    // Extract base station name (remove [DJ Name], (count), HD2, etc.)
+    const stationBase = stationName.split(' [')[0].split(' (')[0].trim();
+    const normalizedStation = normalizeStationName(stationBase);
+    const stationLower = normalizedStation.toLowerCase().replace(/\./g, '');
+    
+    return coreStations.some(core => {
+        if (!core) return false;
+        const coreLower = core.toLowerCase().trim().replace(/\./g, '');
+        
+        // Exact match
+        if (stationLower === coreLower) return true;
+        
+        // Station starts with core name + space (e.g., "WKNC HD2" matches "WKNC")
+        if (stationLower.startsWith(coreLower + ' ')) return true;
+        
+        // For compound stations like "NCPR / WSLU", check if core matches either part
+        if (stationLower.includes('/')) {
+            const parts = stationLower.split('/').map(p => p.trim());
+            if (parts.includes(coreLower)) return true;
+        }
+        
+        return false;
+    });
+}
+
+// Helper: Format a single station with bolding if core
+function formatStationForHTML(stationName, count) {
+    const escaped = escapeHtml(stationName);
+    const isCore = isCoreStation(stationName);
+    const stationHTML = isCore ? `<b>${escaped}</b>` : escaped;
+    
+    if (count > 1) {
+        return `${stationHTML} (${count})`;
+    }
+    return stationHTML;
+}
+
+// Copy spingrid format data for Excel - rebuilt from scratch
 function copySpingridForExcel() {
-    // Get the artist list from the input
+    // Get artist list
     const rawArtists = document.getElementById('artistNames').value || '';
     const artistList = rawArtists
         .split(/\n|,/)
@@ -2207,166 +2248,122 @@ function copySpingridForExcel() {
         return;
     }
     
-    // Group matches by artist and song for spin counts (use normalized keys like display)
+    // Build spin counts: { artist: { song: { station: count } } }
     const spinCounts = {};
     matches.forEach(match => {
-        if (!spinCounts[match.artist]) {
-            spinCounts[match.artist] = {};
-        }
-        
-        // Normalize song name for grouping (case-insensitive)
         const normalizedSong = normalizeText(match.song);
-        
-        if (!spinCounts[match.artist][normalizedSong]) {
-            spinCounts[match.artist][normalizedSong] = {};
-        }
-        // Normalize station name for grouping (e.g., WKNC HD2 -> WKNC)
         const normalizedStation = normalizeStationName(match.station);
+        
+        if (!spinCounts[match.artist]) spinCounts[match.artist] = {};
+        if (!spinCounts[match.artist][normalizedSong]) spinCounts[match.artist][normalizedSong] = {};
         if (!spinCounts[match.artist][normalizedSong][normalizedStation]) {
             spinCounts[match.artist][normalizedSong][normalizedStation] = 0;
         }
         spinCounts[match.artist][normalizedSong][normalizedStation]++;
     });
     
-    let excelData = '';
+    // Build rows: [{ song, count, stations: [{ name, count }] }]
+    const rows = [];
     
-    // Process each artist from the search list (in order)
-    artistList.forEach(artistName => {
-        const artistLower = artistName.toLowerCase();
-        
-        // Find matching artist in tracklist database (case-insensitive)
-        const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
-            artist.toLowerCase() === artistLower
-        );
-        
-        if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
-            // Artist has tracks in database - group by normalized name to handle duplicates
-            const songs = tracklistDatabase[tracklistArtist];
-            const tracklistArtistLower = tracklistArtist.toLowerCase();
-            
-            // Group songs by normalized name (to handle case variations in database)
-            const groupedSongs = {};
-            songs.forEach(songName => {
-                const normalizedSong = normalizeText(songName);
-                if (!groupedSongs[normalizedSong]) {
-                    groupedSongs[normalizedSong] = {
-                        displayName: songName, // Use first occurrence as display name
-                        aggregatedSpins: {}
-                    };
-                }
-                
-                // Aggregate spins from all case variations
-                const matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
-                const songSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedSong];
-                
-                if (songSpins) {
-                    Object.entries(songSpins).forEach(([station, count]) => {
-                        if (!groupedSongs[normalizedSong].aggregatedSpins[station]) {
-                            groupedSongs[normalizedSong].aggregatedSpins[station] = 0;
-                        }
-                        groupedSongs[normalizedSong].aggregatedSpins[station] += count;
-                    });
-                }
-            });
-            
-            // Display grouped songs
-            Object.entries(groupedSongs).forEach(([normalizedKey, group]) => {
-                const aggregatedSpins = group.aggregatedSpins;
-                const totalCount = Object.values(aggregatedSpins).reduce((sum, count) => sum + count, 0);
-                
-                if (totalCount > 0) {
-                    // Use HTML formatting for stations (Excel will preserve bold when pasting HTML)
-                    const stationList = formatStationList(Object.entries(aggregatedSpins));
-                    const stationListPlain = Object.entries(aggregatedSpins)
-                        .map(([station, count]) => count > 1 ? `${station} (${count})` : station)
-                        .join(', ');
-                    excelData += `${group.displayName}\t${totalCount}\t${stationListPlain}\n`;
-                } else {
-                    excelData += `${group.displayName}\t\t\n`;
-                }
-            });
-        } else {
-            // Artist not in tracklist database - show empty entry
-            excelData += `No tracks in database\t0\tAdd tracks to tracklist database\n`;
-        }
-    });
-    
-    // Create HTML version for clipboard (Google Sheets compatibility)
-    // Simplified HTML - no font styling, only preserve bold for core stations
-    let htmlData = '<table>';
     artistList.forEach(artistName => {
         const artistLower = artistName.toLowerCase();
         const tracklistArtist = Object.keys(tracklistDatabase).find(artist => 
             artist.toLowerCase() === artistLower
         );
         
-        if (tracklistArtist && tracklistDatabase[tracklistArtist].length > 0) {
-            const songs = tracklistDatabase[tracklistArtist];
-            const tracklistArtistLower = tracklistArtist.toLowerCase();
-            const groupedSongs = {};
-            
-            songs.forEach(songName => {
-                const normalizedSong = normalizeText(songName);
-                if (!groupedSongs[normalizedSong]) {
-                    groupedSongs[normalizedSong] = {
-                        displayName: songName,
-                        aggregatedSpins: {}
-                    };
-                }
-                
-                const matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
-                const songSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedSong];
-                
-                if (songSpins) {
-                    Object.entries(songSpins).forEach(([station, count]) => {
-                        if (!groupedSongs[normalizedSong].aggregatedSpins[station]) {
-                            groupedSongs[normalizedSong].aggregatedSpins[station] = 0;
-                        }
-                        groupedSongs[normalizedSong].aggregatedSpins[station] += count;
-                    });
-                }
-            });
-            
-            Object.entries(groupedSongs).forEach(([normalizedKey, group]) => {
-                const aggregatedSpins = group.aggregatedSpins;
-                const totalCount = Object.values(aggregatedSpins).reduce((sum, count) => sum + count, 0);
-                
-                if (totalCount > 0) {
-                    const stationList = formatStationList(Object.entries(aggregatedSpins));
-                    // No font styling - let Google Sheets use its default, only preserve bold for core stations
-                    htmlData += `<tr><td>${escapeHtml(group.displayName)}</td><td>${totalCount}</td><td>${stationList}</td></tr>`;
-                } else {
-                    htmlData += `<tr><td>${escapeHtml(group.displayName)}</td><td></td><td></td></tr>`;
-                }
-            });
+        if (!tracklistArtist || !tracklistDatabase[tracklistArtist].length) {
+            rows.push({ song: 'No tracks in database', count: 0, stations: [] });
+            return;
         }
+        
+        const songs = tracklistDatabase[tracklistArtist];
+        const tracklistArtistLower = tracklistArtist.toLowerCase();
+        const matchingArtistKey = Object.keys(spinCounts).find(a => a.toLowerCase() === tracklistArtistLower);
+        
+        // Group songs by normalized name
+        const groupedSongs = {};
+        songs.forEach(songName => {
+            const normalizedSong = normalizeText(songName);
+            if (!groupedSongs[normalizedSong]) {
+                groupedSongs[normalizedSong] = {
+                    displayName: songName,
+                    stations: {}
+                };
+            }
+            
+            // Aggregate spins for this song
+            const songSpins = matchingArtistKey && spinCounts[matchingArtistKey] && spinCounts[matchingArtistKey][normalizedSong];
+            if (songSpins) {
+                Object.entries(songSpins).forEach(([station, count]) => {
+                    if (!groupedSongs[normalizedSong].stations[station]) {
+                        groupedSongs[normalizedSong].stations[station] = 0;
+                    }
+                    groupedSongs[normalizedSong].stations[station] += count;
+                });
+            }
+        });
+        
+        // Convert to rows
+        Object.values(groupedSongs).forEach(group => {
+            const stationEntries = Object.entries(group.stations);
+            const totalCount = stationEntries.reduce((sum, [, count]) => sum + count, 0);
+            
+            rows.push({
+                song: group.displayName,
+                count: totalCount,
+                stations: stationEntries.map(([name, count]) => ({ name, count }))
+            });
+        });
     });
-    htmlData += '</table>';
     
-    // Use ClipboardItem API for better Google Sheets compatibility
-    // This ensures proper HTML formatting is preserved
-    const finalHtml = '<html><body>' + htmlData + '</body></html>';
-    const htmlBlob = new Blob([finalHtml], { type: 'text/html' });
-    const textBlob = new Blob([excelData], { type: 'text/plain' });
-    const clipboardItem = new ClipboardItem({
-        'text/html': htmlBlob,
-        'text/plain': textBlob
+    // Build HTML table - simple and clean
+    let htmlRows = [];
+    rows.forEach(row => {
+        const songCell = escapeHtml(row.song);
+        const countCell = row.count > 0 ? row.count : '';
+        
+        // Build station list with proper bolding
+        const stationParts = row.stations.map(({ name, count }) => 
+            formatStationForHTML(name, count)
+        );
+        const stationCell = stationParts.join(', ');
+        
+        htmlRows.push(`<tr><td>${songCell}</td><td>${countCell}</td><td>${stationCell}</td></tr>`);
     });
     
-    navigator.clipboard.write([clipboardItem]).then(() => {
+    const htmlTable = '<table>' + htmlRows.join('') + '</table>';
+    const htmlContent = '<html><body>' + htmlTable + '</body></html>';
+    
+    // Build plain text version for fallback
+    const textRows = rows.map(row => {
+        const stationText = row.stations
+            .map(({ name, count }) => count > 1 ? `${name} (${count})` : name)
+            .join(', ');
+        return `${row.song}\t${row.count}\t${stationText}`;
+    });
+    const textContent = textRows.join('\n');
+    
+    // Copy to clipboard using ClipboardItem API
+    const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
+    const textBlob = new Blob([textContent], { type: 'text/plain' });
+    
+    navigator.clipboard.write([
+        new ClipboardItem({
+            'text/html': htmlBlob,
+            'text/plain': textBlob
+        })
+    ]).then(() => {
         alert('Spingrid data copied to clipboard! Paste into Google Sheets and formatting (including bold core stations) will be preserved.');
     }).catch(err => {
-        console.error('ClipboardItem API failed, trying execCommand fallback:', err);
+        console.error('ClipboardItem failed:', err);
         
-        // Fallback to execCommand with temporary element
+        // Fallback: Use execCommand with DOM element
         const tempDiv = document.createElement('div');
         tempDiv.style.position = 'fixed';
         tempDiv.style.left = '-9999px';
-        tempDiv.style.top = '-9999px';
-        tempDiv.innerHTML = htmlData;
+        tempDiv.innerHTML = htmlTable;
         document.body.appendChild(tempDiv);
         
-        // Select the content
         const range = document.createRange();
         range.selectNodeContents(tempDiv);
         const selection = window.getSelection();
@@ -2377,18 +2374,18 @@ function copySpingridForExcel() {
             document.execCommand('copy');
             selection.removeAllRanges();
             document.body.removeChild(tempDiv);
-            alert('Spingrid data copied to clipboard! Paste into Google Sheets and formatting (including bold core stations) will be preserved.');
+            alert('Spingrid data copied to clipboard! Paste into Google Sheets.');
         } catch (err2) {
-            console.error('execCommand also failed:', err2);
+            console.error('execCommand failed:', err2);
             selection.removeAllRanges();
             document.body.removeChild(tempDiv);
             
-            // Final fallback to plain text
-            navigator.clipboard.writeText(excelData).then(() => {
-                alert('Spingrid data copied to clipboard (plain text). Paste into Google Sheets.');
+            // Final fallback: plain text
+            navigator.clipboard.writeText(textContent).then(() => {
+                alert('Spingrid data copied (plain text). Paste into Google Sheets.');
             }).catch(err3 => {
-                console.error('Failed to copy: ', err3);
-                alert('failed to copy to clipboard. please try again.');
+                console.error('All copy methods failed:', err3);
+                alert('Failed to copy to clipboard. Please try again.');
             });
         }
     });
