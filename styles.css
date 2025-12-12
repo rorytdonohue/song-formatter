@@ -1583,3 +1583,11 @@ section h3 {
 .song-count-entry.variant-track {
     font-size: 0.9em;
 }
+
+/* Prevent table selection to ensure TSV copy is used */
+#spingridTable {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}

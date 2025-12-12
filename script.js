@@ -2267,26 +2267,27 @@ function formatStationForHTML(stationName, count) {
     return stationHTML;
 }
 
-// Copy spingrid format data for Excel - use TSV string
+// Copy spingrid format data for Excel - use TSV string only
 function copySpingridForExcel() {
     const spingridBody = document.getElementById('spingridResultsBody');
     if (!spingridBody) {
-        alert('No spingrid data to copy. Please run a search first.');
+        alert('No export data available. Please run a search first.');
         return;
     }
     
     // Get the TSV string from data attribute
-    const tsvOutput = spingridBody.getAttribute('data-tsv-output');
-    if (!tsvOutput) {
-        alert('No spingrid data to copy. Please run a search first.');
+    const tsv = spingridBody.getAttribute('data-tsv-output');
+    if (!tsv || !tsv.trim()) {
+        alert('No export data available. Please run a search first.');
         return;
     }
     
-    // Copy TSV string to clipboard
-    navigator.clipboard.writeText(tsvOutput).then(() => {
+    // Copy TSV string to clipboard (explicitly TSV only, no HTML)
+    navigator.clipboard.writeText(tsv).then(() => {
+        console.log('TSV copied for Excel');
         alert('Spingrid data copied to clipboard! Paste into Google Sheets or Excel.');
     }).catch(err => {
-        console.error('Clipboard write failed:', err);
+        console.error('Clipboard copy failed:', err);
         alert('Failed to copy to clipboard. Please try again.');
     });
 }
